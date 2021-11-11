@@ -3,19 +3,25 @@
 
 # BUILT-IN MODULES
 import numpy as np
+import matplotlib.pyplot as plt
 
-from typing import Optional
+from typing import Optional, Tuple, List
+
+
+# TYPE ALIASES
+Locations = Tuple[List[Tuple[float, float]], List[Tuple[float, float]]]
 
 
 # CLASSES
-class LocalizationProblem:
-    def __init__(self, x: Optional[np.ndarray] = None, y: Optional[np.ndarray] = None, f: Optional[np.ndarray] = None,
+class LocationProblem:
+    def __init__(self, x: np.ndarray, y: np.ndarray, l: Locations, f: Optional[np.ndarray] = None,
                  c: Optional[np.ndarray] = None, b: Optional[np.ndarray] = None, d: Optional[np.ndarray] = None,
                  s: Optional[np.ndarray] = None, v: Optional[np.ndarray] = None) -> None:
         """
         Constructor
         :param x: Flags determining if the warehouses are going to be built, dim: Mx1
         :param y: Covered demand fractions, dim: MxN
+        :param l: Locations of warehouses and shops as a tuple of lists of coordinates (x, y)
         :param f: Transport costs from factory to warehouses, dim: Mx1
         :param c: Capacities of the shops, dim: Nx1
         :param b: Warehouses building costs, dim: Mx1
@@ -26,6 +32,7 @@ class LocalizationProblem:
 
         self.x = x
         self.Y = y
+        self.l = l
         self.f = f
         self.c = c
         self.b = b
@@ -33,31 +40,46 @@ class LocalizationProblem:
         self.S = s
         self.V = v
 
+    def draw_graph(self, factory_vertex_color: str, warehouse_vertex_color: str, shop_vertex_color: str,
+                   factory_warehouse_edge_color: str, warehouse_shop_edge_color: str) -> None:
+        """
+        Method to draw the graph representing the locations of factory, warehouses and shops
+        :param factory_vertex_color: Factory vertex color
+        :param warehouse_vertex_color: Warehouse vertex color
+        :param shop_vertex_color: Shop vertex color
+        :param factory_warehouse_edge_color: Edge between factory and warehouse color
+        :param warehouse_shop_edge_color: Edge between warehouse and shop color
+        """
+
+        warehouses, shops = self.l
+
+        plt.figure()
+        plt.title("Area map"), plt.xlabel("x"), plt.ylabel("y")
+
+        # Vertices
+        plt.scatter(0, 0, c=factory_vertex_color, label="Factory")
+
+        for n, (x, y) in enumerate(warehouses):
+            plt.scatter(x, y, c=warehouse_vertex_color, label="Warehouse" if n == 0 else "_nolegend_")
+
+        for n, (x, y) in enumerate(shops):
+            plt.scatter(x, y, c=shop_vertex_color, label="Shop" if n == 0 else "_nolegend_")
+
+        # # Edges
+        # for x1, y1 in warehouses:
+        #     plt.plot([0, x1], [0, y1], c=factory_warehouse_edge_color)
+        #
+        #     for x2, y2 in shops:
+        #         plt.plot([x1, x2], [y1, y2], c=warehouse_shop_edge_color, ls="-.")
+
+        plt.legend(bbox_to_anchor=(1, 1)), plt.grid()
+        plt.show()
+
     def objective_function(self) -> int:
         """
         Method to calculate the objective function value with the current variables values
         :return: Objective function value with the current variables values
         """
-
-        # M, N = self.Y.shape
-        # income: int = 0
-        # cost: int = 0
-        #
-        # for i in range(M):
-        #     for j in range(N):
-        #         taken_goods = self.d[j] * self.Y[i, j]
-        #         income += taken_goods * self.V[i, j]
-        #
-        # for i in range(M):
-        #     warehouse_cost: int = self.f[i] + self.b[i]
-        #     warehouse_stores_transport_cost: int = 0
-        #
-        #     for j in range(N):
-        #         warehouse_stores_transport_cost += np.ceil(self.Y[i, j]) * self.S[i, j]
-        #
-        #     warehouse_cost += warehouse_stores_transport_cost
-        #     warehouse_cost *= self.x[i]
-        #     cost += warehouse_cost
 
         income = ((self.V * self.Y) @ self.d).sum(axis=0)
         cost = np.dot(self.f + self.b + (np.ceil(self.Y) * self.S).sum(axis=0), self.x)
@@ -69,10 +91,6 @@ class LocalizationProblem:
         Method to check the decision variables constraint
         :return: Flag informing if the constraint has been met
         """
-
-        # return 0 <= self.Y.all() <= 1
-
-        # return ((self.x == 0) | (self.x == 1)).all() and ((self.Y <= 1) & (0 <= self.Y)).all()
 
         return np.isin(self.x, [0, 1]).all() and ((self.Y <= 1) & (0 <= self.Y)).all()
 
@@ -90,8 +108,6 @@ class LocalizationProblem:
         :return: Flag informing if the constraint has been met
         """
 
-        # return (np.all(self.Y, axis=0) <= self.x).all()
-
         return (self.Y.max(axis=1) <= self.x).all()
 
     def check_capacity(self) -> bool:
@@ -100,20 +116,30 @@ class LocalizationProblem:
         :return: Flag informing if the constraint has been met
         """
 
-        # for i in range(self.Y.shape[0]):
-        #     check_val = np.dot(self.d, self.Y[i]) <= self.c[i] * self.x[i]
-        #
-        #     if not check_val:
-        #         return False
-        #
-        # return True
-
-        # return (np.dot(self.Y, self.d) <= self.c * self.x).all()
-
         return (np.dot(self.Y, self.d.T) <= self.c * self.x).all()
 
 
 # FUNCTIONS
+def determine_locations(num_of_potential_warehouses: int, num_of_shops: int, area_size: float = 1000) -> Locations:
+    """
+    Function to determine the locations of factory, warehouses and shops
+    :param num_of_potential_warehouses: Number of potential warehouse localizations
+    :param num_of_shops: Number of shops
+    :param area_size: Area size
+    :return: Locations of factory, warehouses and shops as a tuple of lists of coordinates
+    """
+
+    warehouses_x = np.random.uniform(low=-area_size, high=area_size, size=num_of_potential_warehouses)
+    warehouses_y = np.random.uniform(low=-area_size, high=area_size, size=num_of_potential_warehouses)
+    warehouses_coordinates = [(x, y) for x, y in zip(warehouses_x, warehouses_y)]
+
+    shops_x = np.random.uniform(low=-area_size, high=area_size, size=num_of_shops)
+    shops_y = np.random.uniform(low=-area_size, high=area_size, size=num_of_shops)
+    shops_coordinates = [(x, y) for x, y in zip(shops_x, shops_y)]
+
+    return warehouses_coordinates, shops_coordinates
+
+
 def initialize_matrix(num_of_potential_warehouses: int, num_of_shops: int) -> np.ndarray:
     """
     Function to initialize the matrix Y
@@ -137,13 +163,24 @@ def initialize_vector(num_of_potential_warehouses: int) -> np.ndarray:
 
 # MAIN
 def main():
-    M = 10
-    N = 50
+    # Number of locations
+    M = 4
+    N = 20
+
+    # Area size
+    A = 500
+
+    # Vector and matrices
     x = initialize_vector(M)
     y = initialize_matrix(M, N)
-    lp = LocalizationProblem(x=x, y=y)
-    print(lp.check_decision_variables())
+    l = determine_locations(M, N, area_size=A)
 
+    # Problem instance
+    lp = LocationProblem(x, y, l)
+
+    # Optimization algorithm
+    lp.draw_graph("red", "green", "blue", "black", "yellow")
+    print(lp.check_decision_variables())
 
     # mat2 = np.array([[0.7, 2.4],
     #                  [0.3, -1.4]])
