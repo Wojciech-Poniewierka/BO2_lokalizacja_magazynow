@@ -7,9 +7,6 @@ import numpy as np
 
 from typing import Tuple
 
-# PROJECT MODULES
-from config import MUTATION_RATIO, NOISE, CONSTRAINT_ACCURACY
-
 
 # CLASSES
 class Solution:
@@ -17,23 +14,22 @@ class Solution:
     Class to represent the solution
     """
 
-    def __init__(self, n_warehouses: int, n_shops: int, f: np.ndarray, s: np.ndarray, c: np.ndarray, b: np.ndarray,
-                 d: np.ndarray, v: np.ndarray) -> None:
+    def __init__(self, shape: Tuple[int, int], f: np.ndarray, s: np.ndarray, c: np.ndarray, b: np.ndarray,
+                 d: np.ndarray, v: np.ndarray, parameters) -> None:
         """
         Constructor
-        :param n_warehouses: Number of warehouses
-        :param n_shops: Number of shops
+        :param shape: Problem shape
         :param f: Factory to warehouses transport costs, dim: Mx1
         :param s: Warehouses to shops transport costs, dim: MxN
         :param c: Warehouses capacities, dim: Mx1
         :param b: Warehouses building costs, dim: Mx1
         :param d: Demands of the shops, dim: Nx1
         :param v: Sugar values established between warehouses and shops, dim: MxN
+        :param parameters: List: [Mutation_ratio, noise, constraint_accuracy]
         """
 
         # Number of facilities
-        self.M = n_warehouses
-        self.N = n_shops
+        self.M, self.N = shape
 
         # Problem parameters
         self.f = f
@@ -42,6 +38,11 @@ class Solution:
         self.b = b
         self.d = d
         self.V = v
+
+        # Algorithm parameters
+        self.mutation_ratio = parameters[0]
+        self.noise = parameters[1]
+        self.constraint_accuracy = parameters[2]
 
         # Solution matrix
         self.X = np.random.uniform(size=(self.M, self.N))
@@ -77,7 +78,7 @@ class Solution:
         :return: String representation of the solution matrix
         """
 
-        return "\n".join([" ".join([str(round(elem, 2)).center(4) for elem in self.X[i, :]]) for i in range(self.M)])
+        return "\n".join([" ".join([str(round(elem, 2)).center(6) for elem in self.X[i, :]]) for i in range(self.M)])
 
     def calculate_fitness(self) -> float:
         """
@@ -97,7 +98,7 @@ class Solution:
         """
 
         decision_variables_constraint = ((0 <= self.X)  & (self.X <= 1)).all()
-        shop_demand_constraint = np.allclose(self.X.sum(axis=0), np.ones(self.N), atol=CONSTRAINT_ACCURACY)
+        shop_demand_constraint = np.allclose(self.X.sum(axis=0), np.ones(self.N), atol=self.constraint_accuracy)
         capacity_constraint = (np.dot(self.X, self.d.T) <= self.c).all()
 
         return decision_variables_constraint and shop_demand_constraint and capacity_constraint
@@ -116,11 +117,11 @@ class Solution:
         Method to mutate the solution
         """
 
-        if random.uniform(0, 1) < MUTATION_RATIO:
+        if random.uniform(0, 1) < self.mutation_ratio:
             X = self.X
-            self.X = np.random.normal(loc=X, scale=NOISE)
+            self.X = np.random.normal(loc=X, scale=self.noise)
             self.scale()
 
             while not self.is_feasible():
-                self.X = np.random.normal(loc=X, scale=NOISE)
+                self.X = np.random.normal(loc=X, scale=self.noise)
                 self.scale()

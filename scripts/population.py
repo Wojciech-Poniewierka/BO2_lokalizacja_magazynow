@@ -9,7 +9,6 @@ from typing import Tuple, List
 from copy import deepcopy
 
 # PROJECT MODULES
-from config import POPULATION_SIZE, MIN_FITNESS, MAX_GENERATIONS, CROSSOVER_RATIO
 from solution import Solution
 
 
@@ -19,26 +18,32 @@ class Population:
     Class to represent the solutions population
     """
 
-    def __init__(self, n_warehouses: int, n_shops: int, f: np.ndarray, s: np.ndarray, c: np.ndarray, b: np.ndarray,
-                 d: np.ndarray, v: np.ndarray) -> None:
+    def __init__(self, shape: Tuple[int, int], f: np.ndarray, s: np.ndarray, c: np.ndarray, b: np.ndarray,
+                 d: np.ndarray, v: np.ndarray, parameters) -> None:
         """
         Constructor
-        :param n_warehouses: Number of warehouses
-        :param n_shops: Number of shops
+        :param shape: Problem shape
         :param f: Factory to warehouses transport costs, dim: Mx1
         :param s: Warehouses to shops transport costs, dim: MxN
         :param c: Warehouses capacities, dim: Mx1
         :param b: Warehouses building costs, dim: Mx1
         :param d: Demands of the shops, dim: Nx1
         :param v: Sugar values established between warehouses and shops, dim: MxN
+        :param parameters: List: [Mutation_ratio, noise, constraint_accuracy, population_size, min_fitness, max_generations,
+                      crossover_ratio, transport_cost_amplifier]
         """
 
         # Number of facilities
-        self.M = n_warehouses
-        self.N = n_shops
+        self.M, self.N = shape
+
+        # Algorithm parameters
+        self.population_size = parameters[3]
+        self.min_fitness = parameters[4]
+        self.max_generations = parameters[5]
+        self.crossover_ratio = parameters[6]
 
         # Population
-        self.generation = [Solution(self.M, self.N, f, s, c, b, d, v) for _ in range(POPULATION_SIZE)]
+        self.generation = [Solution((self.M, self.N), f, s, c, b, d, v, parameters[:3]) for _ in range(self.population_size)]
         self.fitness: List[float] = []
         self.best_fitness: Tuple[float, int] = (0, 0)
         self.n_generations: int = 0
@@ -48,8 +53,8 @@ class Population:
         Method to evaluate the fitness of each solution in the population
         """
 
-        self.fitness = [self.generation[i].calculate_fitness() for i in range(POPULATION_SIZE)]
-        self.best_fitness = sorted([(self.fitness[i], i) for i in range(POPULATION_SIZE)], key=lambda tup: tup[0])[-1]
+        self.fitness = [self.generation[i].calculate_fitness() for i in range(self.population_size)]
+        self.best_fitness = sorted([(self.fitness[i], i) for i in range(self.population_size)], key=lambda tup: tup[0])[-1]
         self.n_generations += 1
 
     def roulette_wheel(self) -> Solution:
@@ -60,18 +65,18 @@ class Population:
 
         # Get the fitness ratios
         fitness_sum = sum(self.fitness)
-        fitness_ratios = [self.fitness[i] / fitness_sum * 100 for i in range(POPULATION_SIZE)]
+        fitness_ratios = [self.fitness[i] / fitness_sum * 100 for i in range(self.population_size)]
 
         # Create the roulette wheel
-        wheel = np.zeros(POPULATION_SIZE + 1)
+        wheel = np.zeros(self.population_size + 1)
 
-        for i in range(1, POPULATION_SIZE + 1):
+        for i in range(1, self.population_size + 1):
             wheel[i] = fitness_ratios[i - 1] + wheel[i - 1]
 
         # Draw a random solution
         r = np.random.randint(100)
 
-        for i in range(POPULATION_SIZE):
+        for i in range(self.population_size):
             if wheel[i] < r < wheel[i + 1]:
                 return self.generation[i]
 
@@ -91,10 +96,10 @@ class Population:
         Method to perform the crossover
         :param parent1: First parent
         :param parent2: Second parent
-        :return: Offsprings
+        :return: Tuple: (Offspring1, offspring2)
         """
 
-        if random.uniform(0, 1) < CROSSOVER_RATIO:
+        if random.uniform(0, 1) < self.crossover_ratio:
             alpha = 0.1
             mat1 = np.zeros((self.M, self.N))
             mat2 = np.zeros((self.M, self.N))
@@ -132,10 +137,10 @@ class Population:
         best_solution: Tuple[float, Solution] = (self.generation[0].calculate_fitness(), self.generation[0])
         generation = [solution for solution in self.generation]
 
-        while self.n_generations < MAX_GENERATIONS:
+        while self.n_generations < self.max_generations:
             self.evaluate()
 
-            for i in range(0, POPULATION_SIZE, 2):
+            for i in range(0, self.population_size, 2):
                 parent1 = self.select()
                 parent2 = self.select()
 
@@ -157,7 +162,7 @@ class Population:
             self.generation = generation
             self.generation[0] = best_solution[1]
 
-            if best_solution[0] < MIN_FITNESS:
+            if best_solution[0] < self.min_fitness:
                 print("Reached minimum fitness")
 
                 break
