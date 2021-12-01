@@ -9,23 +9,10 @@ import pandas as pd
 from typing import Optional, Tuple, List
 
 # PROJECT MODULES
+from config import Location, Locations, M, N, TRANSPORT_COST_AMPLIFIER, BUILDING_COST_AMPLIFIER, CAPACITY_RANGE,\
+    DEMAND_RANGE, COST_RANGE
 from solution import Solution
 from population import Population
-
-
-# TYPE ALIASES
-Location = Tuple[float, float]
-Locations = Tuple[List[Location], List[Location]]
-
-# GLOBAL VARIABLES
-M = 4
-N = 10
-
-TRANSPORT_COST_AMPLIFIER: float = 0.5
-BUILDING_COST_AMPLIFIER: float = 1
-CAPACITY_RANGE: Tuple[float, float] = (4000, 20000)
-DEMAND_RANGE: Tuple[float, float] = (100, 10000)
-COST_RANGE: Tuple[float, float] = (5, 12)
 
 
 # CLASSES
@@ -48,27 +35,14 @@ class Area:
         shops_y = np.random.uniform(low=-size, high=size, size=N)
         self.shops_coordinates = [(x, y) for x, y in zip(shops_x, shops_y)]
 
-    def calculate_transport_cost(self, l1: Location, l2: Location) -> float:
-        """
-        Method to calculate the transport cost between the locations
-        :param l1: First location
-        :param l2: Second location
-        :return: Transport cost
-        """
-
-        x1, y1 = l1
-        x2, y2 = l2
-
-        return TRANSPORT_COST_AMPLIFIER * np.sqrt((x1 - x2)**2 + (y1 - y2)**2)
-
     def calculate_cost_matrices(self) -> Tuple[np.ndarray, np.ndarray]:
         """
         Method to calculate the cost matrices
         :return: Cost matrices (f, S)
         """
 
-        f = np.array([self.calculate_transport_cost((0, 0), w) for w in self.warehouses_coordinates])
-        S = np.array([[self.calculate_transport_cost(w, s) for s in self.shops_coordinates] for w in self.warehouses_coordinates])
+        f = np.array([calculate_transport_cost((0, 0), w) for w in self.warehouses_coordinates])
+        S = np.array([[calculate_transport_cost(w, s) for s in self.shops_coordinates] for w in self.warehouses_coordinates])
 
         return f, S
 
@@ -78,19 +52,20 @@ class LocationProblem:
     Class to represent the location problem
     """
 
-    def __init__(self, area: Area, c: Optional[np.ndarray] = None, b: Optional[np.ndarray] = None,
+    def __init__(self, c: Optional[np.ndarray] = None, b: Optional[np.ndarray] = None,
                  d: Optional[np.ndarray] = None, v: Optional[np.ndarray] = None) -> None:
         """
         Constructor
-        :param area: Area
-        :param c:
-        :param b:
-        :param d:
-        :param v:
+        :param c: Warehouses capacities, dim: Mx1
+        :param b: Warehouses building costs, dim: Mx1
+        :param d: Demands of the shops, dim: Nx1
+        :param v: Sugar values established between warehouses and shops, dim: MxN
         """
 
+        # Area
+        self.area = Area(500)
+
         # Transport
-        self.area = area
         self.f, self.S = self.area.calculate_cost_matrices()
 
         # Warehouses
@@ -142,13 +117,27 @@ class LocationProblem:
     def solve(self) -> Tuple[Tuple[float, Solution], List[Solution], List[float]]:
         """
         Method to solve the problem
-        :return:
+        :return: Tuple: (Tuple: (Best solution fitness, Best solution), Best generation, Best fitnesses)
         """
 
         return self.population.genetic_algorithm()
 
 
 # FUNCTIONS
+def calculate_transport_cost(l1: Location, l2: Location) -> float:
+    """
+    Method to calculate the transport cost between the locations
+    :param l1: First location
+    :param l2: Second location
+    :return: Transport cost
+    """
+
+    x1, y1 = l1
+    x2, y2 = l2
+
+    return TRANSPORT_COST_AMPLIFIER * np.sqrt((x1 - x2)**2 + (y1 - y2)**2)
+
+
 def save_to_csv(arr: np.ndarray, arr_name: str) -> None:
     """
     Function to save the array to the .csv file
@@ -158,6 +147,7 @@ def save_to_csv(arr: np.ndarray, arr_name: str) -> None:
 
     df = pd.DataFrame(arr)
     df.to_csv(path_or_buf=f"{arr_name}.csv", index=False)
+
 
 def generate_parameters(m: int, n: int) -> None:
     """
@@ -182,6 +172,7 @@ def generate_parameters(m: int, n: int) -> None:
     for arr, arr_name in dic.items():
         save_to_csv(arr_name, arr)
 
+
 def read_parameters() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Function to read the parameters
@@ -199,18 +190,12 @@ def read_parameters() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
 
 # MAIN
 def main():
-    # Area
-    a = Area(500)
-
     # Read parameters
     # generate_parameters(M, N)
-    c, b, d, V = read_parameters()
+    # c, b, d, V = read_parameters()
 
     # Problem instance
-    lp = LocationProblem(a, c=c, b=b, d=d, v=V)
-    # lp = LocationProblem(l)
-
-    # Optimization algorithm
+    lp = LocationProblem()
     lp.draw_graph("red", "green", "blue", "black", "yellow")
 
     # Solve the problem

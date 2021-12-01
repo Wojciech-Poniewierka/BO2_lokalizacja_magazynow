@@ -2,15 +2,13 @@
 # -*- coding: utf-8 -*-
 
 # BUILT-IN MODULES
+import random
 import numpy as np
-import random as rnd
 
 from typing import Tuple
 
-
-# GLOBAL VARIABLES
-MUTATION_RATIO: float = 0.1
-NOISE = 0.0001
+# PROJECT MODULES
+from config import MUTATION_RATIO, NOISE, CONSTRAINT_ACCURACY
 
 
 # CLASSES
@@ -25,9 +23,9 @@ class Solution:
         Constructor
         :param n_warehouses: Number of warehouses
         :param n_shops: Number of shops
-        :param f:
-        :param s:
-        :param c:
+        :param f: Factory to warehouses transport costs, dim: Mx1
+        :param s: Warehouses to shops transport costs, dim: MxN
+        :param c: Warehouses capacities, dim: Mx1
         :param b: Warehouses building costs, dim: Mx1
         :param d: Demands of the shops, dim: Nx1
         :param v: Sugar values established between warehouses and shops, dim: MxN
@@ -46,24 +44,26 @@ class Solution:
         self.V = v
 
         # Solution matrix
-        self.X = np.random.uniform(high=2 / self.N, size=(self.M, self.N))
+        self.X = np.random.uniform(size=(self.M, self.N))
+        self.scale()
 
         while not self.is_feasible():
-            self.X = np.random.uniform(high=2 / self.N, size=(self.M, self.N))
+            self.X = np.random.uniform(size=(self.M, self.N))
+            self.scale()
 
     def __eq__(self, other: "Solution") -> bool:
         """
-        Magic method to compare Solution instances
+        Magic method to compare the Solution instances
         :param other: Other instance
-        :return: Flag informing if Solution instances are equal
+        :return: Flag informing if the Solution instances are equal
         """
 
         return (self.X == other.X).all()
 
     def __getitem__(self, coords: Tuple[int, int]) -> float:
         """
-        Magic method to get the solution matrix element
-        :param coords: Indexes of the solution matrix to get to the element
+        Magic method to get the Solution matrix element
+        :param coords: Indexes of the Solution matrix to get to the element
         :return: Solution matrix element
         """
 
@@ -77,7 +77,7 @@ class Solution:
         :return: String representation of the solution matrix
         """
 
-        return "\n".join([" ".join([str(round(elem, 2)).center(4) for elem in self.X[i]]) for i in range(self.M)])
+        return "\n".join([" ".join([str(round(elem, 2)).center(4) for elem in self.X[i, :]]) for i in range(self.M)])
 
     def calculate_fitness(self) -> float:
         """
@@ -96,27 +96,31 @@ class Solution:
         :return: Flag informing if the solution is feasible
         """
 
-        decision_variables_constraint = ((self.X <= 1) & (0 <= self.X)).all()
-        shop_demand_constraint = (self.X.sum(axis=0) <= 1).all()
+        decision_variables_constraint = ((0 <= self.X)  & (self.X <= 1)).all()
+        shop_demand_constraint = np.allclose(self.X.sum(axis=0), np.ones(self.N), atol=CONSTRAINT_ACCURACY)
         capacity_constraint = (np.dot(self.X, self.d.T) <= self.c).all()
 
         return decision_variables_constraint and shop_demand_constraint and capacity_constraint
+
+    def scale(self) -> None:
+        """
+        Method to scale the decision variables so that they meet the constraint
+        """
+
+        for j in range(self.N):
+            col_sum = self.X[:, j].sum(axis=0)
+            self.X[:, j] /= col_sum
 
     def mutate(self) -> None:
         """
         Method to mutate the solution
         """
 
-        # X = self.X
-        #
-        # if rnd.uniform(0, 1) < MUTATION_RATIO:
-        #     self.X = np.random.normal(loc=self.X, scale=NOISE)
-        #
-        #     if not self.is_feasible():
-        #         self.X = X
-
-        if rnd.uniform(0, 1) < MUTATION_RATIO:
-            self.X = np.random.normal(loc=self.X, scale=NOISE)
+        if random.uniform(0, 1) < MUTATION_RATIO:
+            X = self.X
+            self.X = np.random.normal(loc=X, scale=NOISE)
+            self.scale()
 
             while not self.is_feasible():
-                self.X = np.random.normal(loc=self.X, scale=NOISE)
+                self.X = np.random.normal(loc=X, scale=NOISE)
+                self.scale()
