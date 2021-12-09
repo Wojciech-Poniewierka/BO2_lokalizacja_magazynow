@@ -91,7 +91,7 @@ class Population:
         return self.roulette_wheel()
 
     # Blend crossover
-    def crossover(self, parent1: Solution, parent2: Solution) -> Tuple[Solution, Solution]:
+    def crossover(self, parent1: Solution, parent2: Solution, kind: str) -> Tuple[Solution, Solution]:
         """
         Method to perform the crossover
         :param parent1: First parent
@@ -104,11 +104,40 @@ class Population:
             mat1 = np.zeros((self.M, self.N))
             mat2 = np.zeros((self.M, self.N))
 
-            for i in range(self.M):
-                for j in range(self.N):
-                    gamma = (1 + 2 * alpha) * random.uniform(0, 2 / self.N) - alpha
-                    mat1[i, j] = (1 - gamma) * parent1[i, j] + gamma * parent2[i, j]
-                    mat2[i, j] = gamma * parent1[i, j] + (1. - gamma) * parent2[i, j]
+            if kind == 'blend':
+                for i in range(self.M):
+                    for j in range(self.N):
+                        gamma = (1 + 2 * alpha) * random.uniform(0, 2 / self.N) - alpha
+                        mat1[i, j] = (1 - gamma) * parent1[i, j] + gamma * parent2[i, j]
+                        mat2[i, j] = gamma * parent1[i, j] + (1. - gamma) * parent2[i, j]
+            
+            elif kind == 'linear':
+                mat_list = []
+                mat_list.append((parent1 + parent2).mul(1/2))
+                mat_list.append(parent1.mul(-1/2) + parent2.mul(3/2))
+                mat_list.append(-3/2 * parent1 + 1/2 * parent2)
+                
+                temp_fitness = float('inf')
+                idx = None
+                for i, mat in enumerate(mat_list):
+                    x = deepcopy(parent1)
+                    x.X = mat1
+                    ftn = x.calculate_fitness()
+                    if ftn < temp_fitness:
+                        temp_fitness = ftn
+                        idx = i
+                mat_list.pop(idx)
+                mat1 = mat_list[0]
+                mat2 = mat_list[1]
+            
+            elif kind == 'blend2':
+                beta = random.uniform(0, 1)
+                mat1 = parent1 - beta * (parent2 - parent1)
+                mat2 = parent2 + beta * (parent2 - parent1)
+            
+            else:
+                raise Exception("Wrong type of crossover")
+                
 
             offspring1 = deepcopy(parent1)
             offspring1.X = mat1
@@ -148,7 +177,7 @@ class Population:
                     parent1 = self.select()
                     parent2 = self.select()
 
-                offspring1, offspring2 = self.crossover(parent1, parent2)
+                offspring1, offspring2 = self.crossover(parent1, parent2, 'linear')
 
                 offspring1.mutate()
                 offspring2.mutate()

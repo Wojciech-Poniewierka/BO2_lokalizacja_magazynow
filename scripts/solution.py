@@ -60,6 +60,12 @@ class Solution:
         """
 
         return (self.X == other.X).all()
+    
+    def __add__(self, other):
+        return self.X + other.X
+    
+    def mul(self, number):
+        return self.X * number
 
     def __getitem__(self, coords: Tuple[int, int]) -> float:
         """
