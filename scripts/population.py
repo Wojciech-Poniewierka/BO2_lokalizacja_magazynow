@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 # BUILT-IN MODULES
-import random
 import numpy as np
 
 from typing import Tuple, List
@@ -18,34 +17,39 @@ class Population:
     Class to represent the solutions population
     """
 
-    def __init__(self, shape: Tuple[int, int], f: np.ndarray, s: np.ndarray, c: np.ndarray, b: np.ndarray,
-                 d: np.ndarray, v: np.ndarray, parameters) -> None:
+    def __init__(self, shape: Tuple[int, int],
+                 problem_parameters: Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+                 algorithm_parameters: Tuple[float, float, float, int, float, int, float, float, float,
+                                             Tuple[float, float], Tuple[float, float], Tuple[float, float]]) -> None:
         """
         Constructor
         :param shape: Problem shape
-        :param f: Factory to warehouses transport costs, dim: Mx1
-        :param s: Warehouses to shops transport costs, dim: MxN
-        :param c: Warehouses capacities, dim: Mx1
-        :param b: Warehouses building costs, dim: Mx1
-        :param d: Demands of the shops, dim: Nx1
-        :param v: Sugar values established between warehouses and shops, dim: MxN
-        :param parameters: List: [Mutation_ratio, noise, constraint_accuracy, population_size, min_fitness, max_generations,
-                      crossover_ratio, transport_cost_amplifier]
+        :param problem_parameters: Tuple: (Factory to warehouses transport costs, shape: Mx1,
+        Warehouses to shops transport costs, shape: MxN, Warehouses capacities, shape: Mx1,
+        Warehouses building costs, shape: Mx1, Shops demands, shape: Nx1,
+        Sugar values established between warehouses and shops, shape: MxN)
+        :param algorithm_parameters: Tuple: (Mutation_ratio, Noise, Constraint_accuracy, Population_size, Min_fitness,
+        Max_generations, Crossover_ratio, Transport_cost_amplifier, Building_cost_amplifier, Capacity_range,
+        Demand_range, Cost_range)
         """
 
         # Number of facilities
         self.M, self.N = shape
 
+        # Problem parameters
+        self.f, self.S, self.c, self.b, self.d, self.V = problem_parameters
+
         # Algorithm parameters
-        self.population_size = parameters[3]
-        self.min_fitness = parameters[4]
-        self.max_generations = parameters[5]
-        self.crossover_ratio = parameters[6]
+        self.population_size = algorithm_parameters[3]
+        self.max_fitness = algorithm_parameters[4]
+        self.max_generations = algorithm_parameters[5]
+        self.crossover_ratio = algorithm_parameters[6]
+        self.algorithm_parameters = algorithm_parameters
 
         # Population
-        self.generation = [Solution((self.M, self.N), f, s, c, b, d, v, parameters[:3]) for _ in range(self.population_size)]
-        self.fitness: List[float] = []
-        self.best_fitness: Tuple[float, int] = (0, 0)
+        self.generation = [Solution(shape, problem_parameters, algorithm_parameters)
+                           for _ in range(self.population_size)]
+        self.best_solution = self.generation[0]
         self.n_generations: int = 0
 
     def evaluate(self) -> None:
@@ -53,25 +57,22 @@ class Population:
         Method to evaluate the fitness of each solution in the population
         """
 
-        self.fitness = [self.generation[i].calculate_fitness() for i in range(self.population_size)]
-        self.best_fitness = sorted([(self.fitness[i], i) for i in range(self.population_size)], key=lambda tup: tup[0])[-1]
+        self.best_solution = sorted(self.generation, key=lambda sol: sol.fitness)[-1]
         self.n_generations += 1
 
     def roulette_wheel(self) -> Solution:
         """
-        Method to draw a solution
-        :return: Tuple: Drawn solution
+        Method to draw a solution with the roulette wheel method
+        :return: Drawn solution
         """
 
-        # Get the fitness ratios
-        fitness_sum = sum(self.fitness)
-        fitness_ratios = [self.fitness[i] / fitness_sum * 100 for i in range(self.population_size)]
-
         # Create the roulette wheel
+        population_fitness = [solution.fitness for solution in self.generation]
+        fitness_sum = sum(population_fitness)
         wheel = np.zeros(self.population_size + 1)
 
         for i in range(1, self.population_size + 1):
-            wheel[i] = fitness_ratios[i - 1] + wheel[i - 1]
+            wheel[i] = population_fitness[i - 1] / fitness_sum * 100 + wheel[i - 1]
 
         # Draw a random solution
         r = np.random.randint(100)
@@ -82,74 +83,72 @@ class Population:
 
         return self.generation[0]
 
-    def select(self) -> Solution:
+    def select(self, method: str) -> Solution:
         """
         Method to select the parent from the population
-        :return: Parent
+        :param: method: Selection method
+        :return: Solution chosen to be a parent
         """
 
-        return self.roulette_wheel()
+        if method == "Roulette wheel":
+            return self.roulette_wheel()
 
-    # Blend crossover
-    def crossover(self, parent1: Solution, parent2: Solution, kind: str) -> Tuple[Solution, Solution]:
+    def crossover(self, parent1: Solution, parent2: Solution, method: str) -> Tuple[Solution, Solution]:
         """
         Method to perform the crossover
         :param parent1: First parent
         :param parent2: Second parent
+        :param method: Crossover method
         :return: Tuple: (Offspring1, offspring2)
         """
 
-        if random.uniform(0, 1) < self.crossover_ratio:
-            alpha = 0.1
-            mat1 = np.zeros((self.M, self.N))
-            mat2 = np.zeros((self.M, self.N))
+        if np.random.normal() < self.crossover_ratio:
+            if method == "blend":
+                alpha = 0.1
+                mat1 = np.zeros((self.M, self.N))
+                mat2 = np.zeros((self.M, self.N))
 
-            if kind == 'blend':
                 for i in range(self.M):
                     for j in range(self.N):
-                        gamma = (1 + 2 * alpha) * random.uniform(0, 2 / self.N) - alpha
+                        gamma = (1 + 2 * alpha) * np.random.normal() - alpha
                         mat1[i, j] = (1 - gamma) * parent1[i, j] + gamma * parent2[i, j]
-                        mat2[i, j] = gamma * parent1[i, j] + (1. - gamma) * parent2[i, j]
+                        mat2[i, j] = gamma * parent1[i, j] + (1 - gamma) * parent2[i, j]
+
+                offspring1 = Solution((self.M, self.N), (self.f, self.S, self.c, self.b, self.d, self.V),
+                                      self.algorithm_parameters, mat=mat1)
+                offspring2 = Solution((self.M, self.N), (self.f, self.S, self.c, self.b, self.d, self.V),
+                                      self.algorithm_parameters, mat=mat2)
             
-            elif kind == 'linear':
-                mat_list = []
-                mat_list.append((parent1 + parent2).mul(1/2))
-                mat_list.append(parent1.mul(-1/2) + parent2.mul(3/2))
-                mat_list.append(-3/2 * parent1 + 1/2 * parent2)
+            elif method == "linear":
+                solutions = [(parent1 + parent2).mul(0.5), parent1.mul(-0.5) + parent2.mul(1.5),
+                        parent1.mul(-1.5) + parent2.mul(0.5)]
                 
-                temp_fitness = float('inf')
-                idx = None
-                for i, mat in enumerate(mat_list):
-                    x = deepcopy(parent1)
-                    x.X = mat1
-                    ftn = x.calculate_fitness()
+                temp_fitness, idx = float("inf"), None
+
+                for i, solution in enumerate(solutions):
+                    ftn = solution.calculate_fitness()
+
                     if ftn < temp_fitness:
-                        temp_fitness = ftn
-                        idx = i
-                mat_list.pop(idx)
-                mat1 = mat_list[0]
-                mat2 = mat_list[1]
+                        temp_fitness, idx = ftn, i
+
+                solutions.pop(idx)
+                offspring1 = deepcopy(solutions[0])
+                offspring2 = deepcopy(solutions[1])
             
-            elif kind == 'blend2':
-                beta = random.uniform(0, 1)
-                mat1 = parent1 - beta * (parent2 - parent1)
-                mat2 = parent2 + beta * (parent2 - parent1)
+            elif method == "mix":
+                beta = np.random.normal()
+                offspring1 = parent1 - (parent2 - parent1).mul(beta)
+                offspring2 = parent2 + (parent2 - parent1).mul(beta)
             
             else:
-                raise Exception("Wrong type of crossover")
-                
-
-            offspring1 = deepcopy(parent1)
-            offspring1.X = mat1
-
-            offspring2 = deepcopy(parent2)
-            offspring2.X = mat2
+                raise Exception("Wrong crossover method")
 
             offspring1.scale()
             offspring2.scale()
 
             if not offspring1.is_feasible() or not offspring2.is_feasible():
-                return self.crossover(parent1, parent2)
+                print("here")
+                return self.crossover(parent1, parent2, method)
 
             else:
                 return offspring1, offspring2
@@ -157,43 +156,42 @@ class Population:
         else:
             return parent1, parent2
 
-    def genetic_algorithm(self) -> Tuple[Tuple[float, Solution], List[Solution], List[float]]:
+    def genetic_algorithm(self) -> Solution:
         """
         Method to perform the genetic algorithm
-        :return: Tuple: (Tuple: (Best solution fitness, Best solution), Best generation, Best fitnesses)
+        :return: Best solution
         """
 
-        best_solution: Tuple[float, Solution] = (self.generation[0].calculate_fitness(), self.generation[0])
-        generation = [solution for solution in self.generation]
+        best_solution = self.generation[0]
+        new_generation: List[Solution] = []
 
         while self.n_generations < self.max_generations:
             self.evaluate()
 
-            for i in range(0, self.population_size, 2):
-                parent1 = self.select()
-                parent2 = self.select()
+            for _ in range(0, self.population_size, 2):
+                parent1 = self.select("Roulette wheel")
+                parent2 = self.select("Roulette wheel")
 
                 while parent1 == parent2:
-                    parent1 = self.select()
-                    parent2 = self.select()
+                    parent1 = self.select("Roulette wheel")
+                    parent2 = self.select("Roulette wheel")
 
-                offspring1, offspring2 = self.crossover(parent1, parent2, 'linear')
+                offspring1, offspring2 = self.crossover(parent1, parent2, "linear")
 
-                offspring1.mutate()
-                offspring2.mutate()
+                offspring1.mutate(), offspring2.mutate()
 
-                generation[i] = offspring1
-                generation[i + 1] = offspring2
+                new_generation.append(offspring1), new_generation.append(offspring2)
 
-            if self.best_fitness[0] < best_solution[0]:
-                best_solution = (self.best_fitness[0], self.generation[self.best_fitness[1]])
+            if self.best_solution.fitness < best_solution.fitness:
+                best_solution = self.best_solution
 
-            self.generation = generation
-            self.generation[0] = best_solution[1]
+            self.generation = new_generation
+            self.generation[0] = best_solution
 
-            if best_solution[0] < self.min_fitness:
-                print("Reached minimum fitness")
+            print(best_solution.fitness)
 
+            if best_solution.fitness > self.max_fitness:
+                print("Reached maximal fitness")
                 break
 
-        return best_solution, self.generation, self.fitness
+        return best_solution

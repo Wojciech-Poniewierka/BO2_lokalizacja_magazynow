@@ -2,10 +2,9 @@
 # -*- coding: utf-8 -*-
 
 # BUILT-IN MODULES
-import random
 import numpy as np
 
-from typing import Tuple
+from typing import Tuple, Optional
 
 
 # CLASSES
@@ -14,58 +13,81 @@ class Solution:
     Class to represent the solution
     """
 
-    def __init__(self, shape: Tuple[int, int], f: np.ndarray, s: np.ndarray, c: np.ndarray, b: np.ndarray,
-                 d: np.ndarray, v: np.ndarray, parameters) -> None:
+    def __init__(self, shape: Tuple[int, int],
+                 problem_parameters: Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+                 algorithm_parameters: Tuple[float, float, float, int, float, int, float, float, float,
+                                             Tuple[float, float], Tuple[float, float], Tuple[float, float]],
+                 mat: Optional[np.ndarray] = None) -> None:
         """
         Constructor
         :param shape: Problem shape
-        :param f: Factory to warehouses transport costs, dim: Mx1
-        :param s: Warehouses to shops transport costs, dim: MxN
-        :param c: Warehouses capacities, dim: Mx1
-        :param b: Warehouses building costs, dim: Mx1
-        :param d: Demands of the shops, dim: Nx1
-        :param v: Sugar values established between warehouses and shops, dim: MxN
-        :param parameters: List: [Mutation_ratio, noise, constraint_accuracy]
+        :param problem_parameters: Tuple: (Factory to warehouses transport costs, shape: Mx1,
+        Warehouses to shops transport costs, shape: MxN, Warehouses capacities, shape: Mx1,
+        Warehouses building costs, shape: Mx1, Shops demands, shape: Nx1,
+        Sugar values established between warehouses and shops, shape: MxN)
+        :param algorithm_parameters: Tuple: (Mutation_ratio, Noise, Constraint_accuracy, Population_size, Min_fitness,
+        Max_generations, Crossover_ratio, Transport_cost_amplifier, Building_cost_amplifier, Capacity_range,
+        Demand_range, Cost_range)
+        :param mat: Decision variables matrix
         """
 
         # Number of facilities
         self.M, self.N = shape
 
         # Problem parameters
-        self.f = f
-        self.S = s
-        self.c = c
-        self.b = b
-        self.d = d
-        self.V = v
+        self.f, self.S, self.c, self.b, self.d, self.V = problem_parameters
 
         # Algorithm parameters
-        self.mutation_ratio = parameters[0]
-        self.noise = parameters[1]
-        self.constraint_accuracy = parameters[2]
+        self.mutation_ratio = algorithm_parameters[0]
+        self.noise = algorithm_parameters[1]
+        self.constraint_accuracy = algorithm_parameters[2]
 
         # Solution matrix
-        self.X = np.random.uniform(size=(self.M, self.N))
-        self.scale()
-
-        while not self.is_feasible():
-            self.X = np.random.uniform(size=(self.M, self.N))
+        if mat is None:
+            self.X = np.random.normal(size=(self.M, self.N))
             self.scale()
+
+            while not self.is_feasible():
+                self.X = np.random.normal(size=(self.M, self.N))
+                self.scale()
+
+        else:
+            self.X = mat
+
+        self.fitness = self.calculate_fitness()
 
     def __eq__(self, other: "Solution") -> bool:
         """
         Magic method to compare the Solution instances
-        :param other: Other instance
+        :param other: Other Solution instance
         :return: Flag informing if the Solution instances are equal
         """
 
         return (self.X == other.X).all()
     
-    def __add__(self, other):
-        return self.X + other.X
-    
-    def mul(self, number):
-        return self.X * number
+    def __add__(self, other: "Solution") -> "Solution":
+        """
+        Magic method to add 2 Solution instances
+        :param other: Other Solution instance
+        :return: Sum of Solution instances matrices
+        """
+
+        self.X += other.X
+        self.fitness = self.calculate_fitness()
+
+        return self
+
+    def __sub__(self, other: "Solution") -> "Solution":
+        """
+        Magic method to subtract 2 Solution instances
+        :param other: Other Solution instance
+        :return: Subtraction of Solution instances matrices
+        """
+
+        self.X -= other.X
+        self.fitness = self.calculate_fitness()
+
+        return self
 
     def __getitem__(self, coords: Tuple[int, int]) -> float:
         """
@@ -85,6 +107,18 @@ class Solution:
         """
 
         return "\n".join([" ".join([str(round(elem, 2)).center(6) for elem in self.X[i, :]]) for i in range(self.M)])
+
+    def mul(self, number: float) -> "Solution":
+        """
+        Method to multiply the Solution instance by a constant value
+        :param number: Constant value
+        :return: Multiplied Solution instance
+        """
+
+        self.X *= number
+        self.fitness = self.calculate_fitness()
+
+        return self
 
     def calculate_fitness(self) -> float:
         """
@@ -115,6 +149,8 @@ class Solution:
         """
 
         for j in range(self.N):
+            self.X[:, j] = np.abs(self.X[:, j])
+
             col_sum = self.X[:, j].sum(axis=0)
             self.X[:, j] /= col_sum
 
@@ -123,7 +159,7 @@ class Solution:
         Method to mutate the solution
         """
 
-        if random.uniform(0, 1) < self.mutation_ratio:
+        if np.random.normal() < self.mutation_ratio:
             X = self.X
             self.X = np.random.normal(loc=X, scale=self.noise)
             self.scale()

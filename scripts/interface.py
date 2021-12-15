@@ -7,20 +7,28 @@ import tkinter.ttk as ttk
 import matplotlib.pyplot as plt
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from typing import Tuple
+from typing import Tuple, List
 
 # PROJECT MODULES
-from solver import Area, LocationProblem
+from area import Area
+from solver import LocationProblem
 
 
 # GLOBAL CONSTANTS
 WIDTH: int = 900
 HEIGHT: int = 500
-WINDOW_SIZE: str = f"{WIDTH}x{HEIGHT}"
+TITLE: str = "WareLoc"
 BACKGROUND_COLOR: str = "#3b414a"
 TEXT_COLOR: str = "#121212"
 
+# ROOT
 ROOT = tk.Tk()
+x = int((ROOT.winfo_screenwidth() - WIDTH) / 2)
+y = int((ROOT.winfo_screenheight() - HEIGHT) / 2)
+ROOT.geometry(f"{WIDTH}x{HEIGHT}+{x}+{y}")
+ROOT.title(TITLE)
+ROOT.config(background=BACKGROUND_COLOR)
+ROOT.bind("<Escape>", lambda event: ROOT.quit())
 
 
 # CLASSES
@@ -33,7 +41,7 @@ class Matrix:
         """
         Constructor
         :param master: Master frame
-        :param shape: Problem shape
+        :param shape: Matrix shape
         """
 
         self.mat = []
@@ -49,7 +57,8 @@ class Matrix:
             row = []
 
             for j in range(self.N):
-                cell = tk.Entry(self.frame, fg=TEXT_COLOR, bg="white", width=10, state="normal", disabledbackground='#000000')
+                cell = tk.Entry(self.frame, fg=TEXT_COLOR, bg="white", width=10, state="normal",
+                                disabledbackground='#000000')
                 cell.grid(row=i, column=j)
                 cell.bind("<Up>", lambda event: self.move_up())
                 cell.bind("<Down>", lambda event: self.move_down())
@@ -123,6 +132,8 @@ class Matrix:
 
             self.array.append(row)
 
+        print(self.array)
+
 
 class Application:
     """
@@ -138,6 +149,7 @@ class Application:
         self.N = None
         self.area = None
         self.chart = None
+        self.mats: List[Matrix] = []
 
         self.notebook = ttk.Notebook(ROOT)
         self.notebook.pack()
@@ -146,16 +158,23 @@ class Application:
         tab.grid_rowconfigure(0)
         tab.grid_columnconfigure(0, weight=1)
         tab.grid_columnconfigure(1, weight=1)
+
         self.notebook.add(tab, text="Main window")
         self.tabs = [tab]
-        self.dim_button = tk.Button(tab, text="Choose dimensions", command=self.dim)
+
+        self.dim_button = tk.Button(tab, text="Choose shape", command=self.determine_shape)
         self.dim_button.grid(row=0, column=0, columnspan=2)
+
         self.M_entry = tk.Entry(tab)
         self.M_entry.grid(row=1, column=0)
+        self.M_entry.insert(0, 3)
+
         self.N_entry = tk.Entry(tab)
         self.N_entry.grid(row=1, column=1)
+        self.N_entry.insert(0, 5)
 
-        tk.Label(tab, text="Parameters").grid(row=2, column=0, columnspan=2)
+        # Algorithm parameters
+        tk.Label(tab, text="Algorithm parameters").grid(row=2, column=0, columnspan=2)
 
         # Solution
         tk.Label(tab, text="Mutation ratio").grid(row=3, column=0)
@@ -179,12 +198,12 @@ class Application:
         self.population_size_entry.grid(row=6, column=1)
         self.population_size_entry.insert(0, 30)
 
-        tk.Label(tab, text="Min fitness").grid(row=7, column=0)
-        self.min_fitness_entry = tk.Entry(tab)
-        self.min_fitness_entry.grid(row=7, column=1)
-        self.min_fitness_entry.insert(0, 0.01)
+        tk.Label(tab, text="Maximal fitness").grid(row=7, column=0)
+        self.max_fitness_entry = tk.Entry(tab)
+        self.max_fitness_entry.grid(row=7, column=1)
+        self.max_fitness_entry.insert(0, 100000)
 
-        tk.Label(tab, text="Max generations").grid(row=8, column=0)
+        tk.Label(tab, text="Maximal number of generations").grid(row=8, column=0)
         self.max_generations_entry = tk.Entry(tab)
         self.max_generations_entry.grid(row=8, column=1)
         self.max_generations_entry.insert(0, 15)
@@ -194,75 +213,47 @@ class Application:
         self.crossover_ratio_entry.grid(row=9, column=1)
         self.crossover_ratio_entry.insert(0, 0.8)
 
+        # Problem parameters
+        tk.Label(tab, text="Problem parameters").grid(row=10, column=0, columnspan=2)
+
         # Other
-        tk.Label(tab, text="Transport cost amplifier").grid(row=10, column=0)
+        tk.Label(tab, text="Transport cost amplifier").grid(row=11, column=0)
         self.transport_cost_amplifier_entry = tk.Entry(tab)
-        self.transport_cost_amplifier_entry.grid(row=10, column=1)
+        self.transport_cost_amplifier_entry.grid(row=11, column=1)
         self.transport_cost_amplifier_entry.insert(0, 0.5)
 
-        tk.Label(tab, text="Building cost amplifier").grid(row=11, column=0)
+        tk.Label(tab, text="Building cost amplifier").grid(row=12, column=0)
         self.building_cost_amplifier_entry = tk.Entry(tab)
-        self.building_cost_amplifier_entry.grid(row=11, column=1)
+        self.building_cost_amplifier_entry.grid(row=12, column=1)
         self.building_cost_amplifier_entry.insert(0, 1)
 
-        tk.Label(tab, text="Capacity range").grid(row=12, column=0)
+        tk.Label(tab, text="Capacity range").grid(row=13, column=0)
         self.capacity_range_entry = tk.Entry(tab)
-        self.capacity_range_entry.grid(row=12, column=1)
-        self.capacity_range_entry.insert(0, "10000, 25000")
+        self.capacity_range_entry.grid(row=13, column=1)
+        self.capacity_range_entry.insert(0, "40000, 60000")
 
-        tk.Label(tab, text="Demand range").grid(row=13, column=0)
+        tk.Label(tab, text="Demand range").grid(row=14, column=0)
         self.demand_range_entry = tk.Entry(tab)
-        self.demand_range_entry.grid(row=13, column=1)
+        self.demand_range_entry.grid(row=14, column=1)
         self.demand_range_entry.insert(0, "100, 7000")
 
-        tk.Label(tab, text="Cost range").grid(row=14, column=0)
+        tk.Label(tab, text="Cost range").grid(row=15, column=0)
         self.cost_range_entry = tk.Entry(tab)
-        self.cost_range_entry.grid(row=14, column=1)
-        self.cost_range_entry.insert(0, "5, 12")
+        self.cost_range_entry.grid(row=15, column=1)
+        self.cost_range_entry.insert(0, "10, 20")
 
+        # Run button
         self.run_button = tk.Button(tab, text="Run", command=self.run, state="disabled")
-        self.run_button.grid(row=15, column=0, columnspan=2)
+        self.run_button.grid(row=16, column=0, columnspan=2, pady=10)
 
-        self.notebook.bind("<Tab>", lambda event: self.move())
-        self.notebook.bind("<Shift-KeyPress-Tab>", lambda event: self.move(reverse=True))
-
-        self.mat3 = None
-        self.mat4 = None
-        self.mat5 = None
-        self.mat6 = None
-
-    def get_cursor_location(self) -> int:
-        """
-        Method to get the current tab index
-        :return: Current tab index
-        """
-
-        digit = self.notebook.select()[-1]
-
-        if digit in "".join([str(n) for n in range(10)]):
-            return int(digit) - 1
-
-        else:
-            return 0
-
-    def move(self, reverse: bool = False) -> None:
-        """
-        Method to move to the adjacent tab
-        :param reverse: Flag determining the direction of the move: True -> Move right, False -> Move left
-        """
-
-        i = self.get_cursor_location()
-        idx = (i - 1) % len(self.tabs) if reverse else (i + 1) % len(self.tabs)
-        self.notebook.select(self.tabs[idx])
-
-    def dim(self) -> None:
+    def determine_shape(self) -> None:
         """
         Method to determine the problem shape
         """
 
         self.M = self.M if self.M_entry.get() == "" else int(self.M_entry.get())
         self.N = self.N if self.N_entry.get() == "" else int(self.N_entry.get())
-        self.dim_button["text"] = "Change dimensions"
+        self.dim_button["text"] = "Change shape"
         self.run_button["state"] = "normal"
         self.update()
 
@@ -271,6 +262,7 @@ class Application:
         Method to update the area and matrices tabs
         """
 
+        # Remove previous tabs
         for tab in self.tabs[1:]:
             tab.destroy()
 
@@ -279,37 +271,24 @@ class Application:
 
         self.tabs = self.tabs[:1]
 
-        tab2 = tk.Frame(self.notebook)
-        self.notebook.add(tab2, text="Area")
-        self.tabs.append(tab2)
+        # Area tab
+        self.tabs.append(tk.Frame(self.notebook))
+        self.notebook.add(self.tabs[1], text="Area")
 
         self.area = Area(500, (self.M, self.N))
         fig = plt.Figure(figsize=(6, 5), dpi=100)
-        ax = fig.add_subplot(111)
+        ax = fig.add_subplot(1, 1, 1)
         self.chart = FigureCanvasTkAgg(fig, self.tabs[1]).get_tk_widget()
         self.chart.pack()
         self.area.draw_graph(ax)
 
-        tab3 = tk.Frame(self.notebook)
-        self.notebook.add(tab3, text="Warehouses capacities")
-        self.tabs.append(tab3)
-
-        tab4 = tk.Frame(self.notebook)
-        self.notebook.add(tab4, text="Warehouses building costs")
-        self.tabs.append(tab4)
-
-        tab5 = tk.Frame(self.notebook)
-        self.notebook.add(tab5, text="Shops demands")
-        self.tabs.append(tab5)
-
-        tab6 = tk.Frame(self.notebook)
-        self.notebook.add(tab6, text="Costs established between warehouses and shops")
-        self.tabs.append(tab6)
-
-        self.mat3 = Matrix(tab3, (self.M, 1))
-        self.mat4 = Matrix(tab4, (self.M, 1))
-        self.mat5 = Matrix(tab5, (1, self.N))
-        self.mat6 = Matrix(tab6, (self.M, self.N))
+        # Another tabs
+        for text, shape in [("Warehouses capacities", (self.M, 1)), ("Warehouses building costs", (self.M, 1)),
+                            ("Shops demands", (1, self.N)),
+                            ("Costs established between warehouses and shops", (self.M, self.N))]:
+            self.tabs.append(tk.Frame(self.notebook))
+            self.notebook.add(self.tabs[-1], text=text)
+            self.mats.append(Matrix(self.tabs[-1], shape))
 
     def run(self) -> None:
         """
@@ -323,7 +302,7 @@ class Application:
 
         # Population
         population_size = int(self.population_size_entry.get())
-        min_fitness = float(self.min_fitness_entry.get())
+        max_fitness = float(self.max_fitness_entry.get())
         max_generations = int(self.max_generations_entry.get())
         crossover_ratio = float(self.crossover_ratio_entry.get())
 
@@ -337,40 +316,18 @@ class Application:
         cost_lst = self.cost_range_entry.get().split(", ")
         cost_range = (float(cost_lst[0]), float(cost_lst[1]))
 
-        parameters = [mutation_ratio, noise, constraint_accuracy, population_size, min_fitness, max_generations,
-                      crossover_ratio, building_cost_amplifier, capacity_range, demand_range, cost_range]
+        algorithm_parameters = (mutation_ratio, noise, constraint_accuracy, population_size, max_fitness,
+                                max_generations, crossover_ratio, transport_cost_amplifier, building_cost_amplifier,
+                                capacity_range, demand_range, cost_range)
 
         f, S = self.area.calculate_cost_matrices(transport_cost_amplifier)
-        lp = LocationProblem((self.M, self.N), f, S, parameters)
-        best_solution, generation, fitness = lp.solve()
-        fitness, solution = best_solution
-        tab = self.tabs[0]
-        tk.Label(tab, text=f"Fitness: {fitness}").grid(row=16, column=0, columnspan=2)
-        tk.Label(tab, text=f"Solution\n{solution}").grid(row=17, column=0, columnspan=2)
-        print(self.mat4.array)
-
-
-# FUNCTIONS
-def window_config(window: tk.Tk, title: str) -> tk.Tk:
-    """
-    Function to scale and name the window
-    :param window: Main window
-    :param title: Title
-    :return: Updated window
-    """
-
-    x = int((ROOT.winfo_screenwidth() - WIDTH) / 2)
-    y = int((ROOT.winfo_screenheight() - HEIGHT) / 2)
-    window.geometry(f'{WIDTH}x{HEIGHT}+{x}+{y}')
-    window.title(title)
-    window.config(background=BACKGROUND_COLOR)
-
-    return window
+        lp = LocationProblem((self.M, self.N), (f, S), algorithm_parameters)
+        best_solution = lp.solve()
+        tk.Label(self.tabs[0], text=f"Solution\n{best_solution}").grid(row=16, column=0, columnspan=2)
+        tk.Label(self.tabs[0], text=f"Fitness: {best_solution.fitness}").grid(row=17, column=0, columnspan=2)
 
 
 # MAIN
 if __name__ == "__main__":
-    ROOT = window_config(ROOT, "WareLoc")
-    ROOT.bind("<Escape>", lambda event: ROOT.quit())
     app = Application()
     ROOT.mainloop()
