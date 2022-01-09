@@ -2,10 +2,15 @@
 # -*- coding: utf-8 -*-
 
 # BUILT-IN MODULES
+import tkinter as tk
 import numpy as np
 import matplotlib.pyplot as plt
 
-from typing import Tuple
+from typing import Tuple, Optional
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+# PROJECT MODULES
+from data import ProblemSize
 
 
 # CLASSES
@@ -14,79 +19,81 @@ class Area:
     Class to represent the area
     """
 
-    def __init__(self, size: float, shape: Tuple[int, int]) -> None:
+    def __init__(self, length: float, problem_size: ProblemSize, tab: tk.Frame) -> None:
         """
         Constructor
-        :param size: Area size, square side
-        :param shape: Problem shape
+        :param length: Area square side length
+        :param problem_size: Problem size
+        :param tab: Notebook tab
         """
 
-        M, N = shape
+        # Notebook tab
+        self.tab = tab
 
-        warehouses_x = np.random.uniform(low=-size, high=size, size=M)
-        warehouses_y = np.random.uniform(low=-size, high=size, size=M)
-        self.warehouses_coordinates = [(x, y) for x, y in zip(warehouses_x, warehouses_y)]
+        # Problem size
+        self.problem_size = problem_size
 
-        shops_x = np.random.uniform(low=-size, high=size, size=N)
-        shops_y = np.random.uniform(low=-size, high=size, size=N)
-        self.shops_coordinates = [(x, y) for x, y in zip(shops_x, shops_y)]
+        # Facilities coordinates
+        self.warehouses = np.random.uniform(low=-length, high=length, size=(problem_size.M, 2))
+        self.shops = np.random.uniform(low=-length, high=length, size=(problem_size.N, 2))
 
-    def calculate_cost_matrices(self, transport_cost_amplifier: float) -> Tuple[np.ndarray, np.ndarray]:
+        # Distances
+        self.factory_warehouses_distances = np.array([np.sqrt(x**2 + y**2)
+                                                      for (x, y) in self.warehouses]).reshape(problem_size.M, 1)
+        self.shops_warehouses_distances = np.array([[np.sqrt((w_x - s_x)**2 + (w_y - s_y)**2)
+                                                     for (s_x, s_y) in self.shops]
+                                                    for (w_x, w_y) in self.warehouses])
+
+        # Draw a map
+        self.draw()
+
+    def draw(self, warehouses: Optional[np.ndarray] = None) -> None:
         """
-        Method to calculate the cost matrices
-        :param transport_cost_amplifier: Transport cost amplifier
-        :return: Tuple: (Factory to warehouses transport costs - shape: Mx1,
-        warehouses to shops transport costs - shape: MxN)
+        Method to draw a map
+        :param warehouses: Warehouse
         """
 
-        f = [calculate_transport_cost((0, 0), w, transport_cost_amplifier)
-                      for w in self.warehouses_coordinates]
-        S = [[calculate_transport_cost(w, s, transport_cost_amplifier) for s in self.shops_coordinates]
-                      for w in self.warehouses_coordinates]
+        # Clean the notebook tab
+        for widget in self.tab.winfo_children():
+            widget.destroy()
 
-        return np.array(f), np.array(S)
-
-    def draw_graph(self, ax: plt.Axes) -> None:
-        """
-        Method to draw the graph representing the locations of factory, warehouses and shops
-        :param ax: Axis
-        """
+        # Create a chart
+        fig = plt.Figure(figsize=(10, 10), dpi=100)
+        ax = fig.add_subplot(1, 1, 1)
+        FigureCanvasTkAgg(fig, self.tab).get_tk_widget().pack()
 
         # Description
         ax.set_title("Area map"), ax.set_xlabel("x"), ax.set_ylabel("y")
 
+        # Edges
+        if warehouses is not None:
+            for i in range(self.problem_size.M):
+                if warehouses[i] > 0:
+                    x0, y0 = self.warehouses[i]
+                    ax.plot([x0, 0], [y0, 0], c="black", label="_nolegend_")
+
+                    for n, (x, y) in enumerate(self.shops):
+                        ax.plot([x0, x], [y0, y], c="black", ls='--', label="_nolegend_")
+
         # Vertices
-        ax.scatter(0, 0, c="red", label="Factory")
+        ax.scatter(0, 0, s=60, c="red", label="Factory")
 
-        for n, (x, y) in enumerate(self.warehouses_coordinates):
-            ax.scatter(x, y, c="green", label="Warehouse" if n == 0 else "_nolegend_")
+        for m, (x, y) in enumerate(self.warehouses):
+            ax.scatter(x, y, c="green", s=40, label="Warehouse" if m == 0 else "_nolegend_")
 
-        for n, (x, y) in enumerate(self.shops_coordinates):
-            ax.scatter(x, y, c="blue", label="Shop" if n == 0 else "_nolegend_")
+        for n, (x, y) in enumerate(self.shops):
+            ax.scatter(x, y, c="blue", s=20, label="Shop" if n == 0 else "_nolegend_")
 
-        # # Edges
-        # for x1, y1 in self.warehouses_coordinates:
-        #     plt.plot([0, x1], [0, y1], c="black")
-        #
-        #     for x2, y2 in self.shops_coordinates:
-        #         plt.plot([x1, x2], [y1, y2], c="yellow", ls="-.")
-
+        # Legend
         ax.legend(bbox_to_anchor=(1, 1)), ax.grid()
         plt.show()
 
+    def calculate_cost_matrices(self, amplifier: float) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Method to calculate the cost matrices
+        :param amplifier: Transport cost amplifier
+        :return: Tuple: (Factory to warehouses transport costs - shape: Mx1,
+        warehouses to shops transport costs - shape: MxN)
+        """
 
-# FUNCTIONS
-def calculate_transport_cost(location1: Tuple[float, float], location2: Tuple[float, float],
-                             transport_cost_amplifier: float) -> float:
-    """
-    Method to calculate the transport cost between the locations
-    :param location1: First location
-    :param location2: Second location
-    :param transport_cost_amplifier: Transport cost amplifier
-    :return: Transport cost
-    """
-
-    x1, y1 = location1
-    x2, y2 = location2
-
-    return transport_cost_amplifier * np.sqrt((x1 - x2)**2 + (y1 - y2)**2)
+        return amplifier * self.factory_warehouses_distances, amplifier * self.shops_warehouses_distances
