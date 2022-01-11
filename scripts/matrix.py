@@ -8,15 +8,8 @@ import numpy as np
 from typing import Tuple, List, Optional
 
 # PROJECT MODULES
+from config import TEXT_COLOR
 from data import ProblemSize
-
-
-# GLOBAL CONSTANTS
-DEFAULT_CAPACITY = 50000
-DEFAULT_DEMAND = 4000
-DEFAULT_COST = 15
-
-TEXT_COLOR: str = "#121212"
 
 
 # CLASSES
@@ -35,12 +28,12 @@ class Matrix:
         """
 
         if symbol in ("f", "S", "b"):
-            self.blank_replacement = None
+            self.replacement = None
             self.state = "disabled"
 
         else:
-            d = {"c": DEFAULT_CAPACITY, "d": DEFAULT_DEMAND, "V": DEFAULT_COST}
-            self.blank_replacement = d[symbol]
+            d = {"c": 50000, "d": 4000, "V": 15}
+            self.replacement = d[symbol]
             self.state = "normal"
 
         self.cells: List[List[tk.Entry]] = []
@@ -129,29 +122,32 @@ class Matrix:
         Method to display the matrix
         """
 
-        self.array = np.around(self.array, decimals=2)
+        array = np.around(self.array, decimals=2)
 
         for widget in self.display_frame.winfo_children():
             widget.destroy()
 
-        mat = "\n".join([" ".join([str(round(elem, 2)).center(9) for elem in self.array[i, :]]) for i in range(self.M)])
+        mat = "\n".join([" ".join([str(round(elem, 2)).center(9) for elem in array[i, :]]) for i in range(self.M)])
         tk.Label(self.display_frame, text=f"\nMatrix:\n{mat}").grid()
 
         if self.state == "normal":
-            for i, row in enumerate(self.array):
+            for i, row in enumerate(array):
                 for j, elem in enumerate(row):
+                    self.cells[i][j].delete(0, tk.END)
                     self.cells[i][j].insert(0, elem)
 
         else:
-            for i, row in enumerate(self.array):
+            for i, row in enumerate(array):
                 for j, elem in enumerate(row):
                     self.cells[i][j]["state"] = "normal"
+                    self.cells[i][j].delete(0, tk.END)
                     self.cells[i][j].insert(0, elem)
                     self.cells[i][j]["state"] = "disabled"
 
     def set_array(self, array: np.ndarray) -> None:
         """
         Method to set the array values
+        :param array: Array
         """
 
         self.array = array
@@ -173,6 +169,7 @@ class Matrix:
         The cell value is actually a number -> The cell value as a float
         """
 
+        self.warning_label_text.set("")
         cell_value = cell.get()
 
         if cell_value != "" and cell_value.count(".") <= 1:
@@ -187,4 +184,4 @@ class Matrix:
 
         self.warning_label_text.set("Cell value should be a float")
 
-        return self.blank_replacement
+        return self.replacement

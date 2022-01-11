@@ -17,8 +17,7 @@ class Solution:
     """
 
     def __init__(self, problem_size: ProblemSize, problem_parameters: ProblemParameters,
-                 algorithm_parameters: AlgorithmParameters, n_generation: int,
-                 mat: Optional[np.ndarray] = None) -> None:
+                 algorithm_parameters: AlgorithmParameters, mat: Optional[np.ndarray] = None) -> None:
         """
         Constructor
         :param problem_size: Problem size
@@ -27,7 +26,6 @@ class Solution:
         Warehouses building costs, shape: Mx1, Shops demands, shape: Nx1,
         Sugar values established between warehouses and shops, shape: MxN)
         :param algorithm_parameters: Algorithm parameters
-        :param n_generation: Number of generation
         :param mat: Decision variables matrix
         """
 
@@ -49,35 +47,34 @@ class Solution:
         self.algorithm_parameters = algorithm_parameters
         self.mutation_ratio = algorithm_parameters.mutation_ratio
         self.n_generations = algorithm_parameters.n_generations
-        self.penalty_coefficient = algorithm_parameters.penalty_coefficient
-
+        self.equality_penalty_coefficient = algorithm_parameters.equality_penalty_coefficient
+        self.inequality_penalty_coefficient = algorithm_parameters.inequality_penalty_coefficient
         self.mutation_method = algorithm_parameters.methods[3]
         self.mutation_method_value = algorithm_parameters.methods_values[3]
 
         # Fitness
-        self.n_generation = n_generation
         self.fitness, self.penalty = 0, 0
 
         # Decision variables matrix
-        # if mat is None:
-        #     self.X = np.random.uniform(size=(self.M, self.N))
-        #
-        #     while not self.is_feasible():
-        #         self.X = np.random.uniform(size=(self.M, self.N))
-        #
-        # else:
-        #     self.X = mat
-
         if mat is None:
-            self.X = np.random.uniform(low=0, high=2 / self.M, size=(self.M, self.N))
-            self.calculate()
+            self.X = np.random.uniform(size=(self.M, self.N))
 
-            while not self.is_feasible() or self.fitness < 2 * self.penalty:
-                self.X = np.random.uniform(low=0, high=2 / self.M, size=(self.M, self.N))
-                self.calculate()
+            for j in range(self.N):
+                col_sum = self.X[:, j].sum()
+                self.X[:, j] /= col_sum
+
+            while (self.X @ self.d.T > self.c).any():
+                self.X = np.random.uniform(size=(self.M, self.N))
+
+                for j in range(self.N):
+                    col_sum = self.X[:, j].sum()
+                    self.X[:, j] /= col_sum
+
+            self.calculate()
 
         else:
             self.X = mat
+            self.calculate()
 
     def __eq__(self, other: "Solution") -> bool:
         """
@@ -104,8 +101,7 @@ class Solution:
         :return: Sum of Solution instances matrices
         """
 
-        return Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, self.n_generation,
-                        mat=self.X + other.X)
+        return Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=self.X + other.X)
 
     def __sub__(self, other: "Solution") -> "Solution":
         """
@@ -114,8 +110,7 @@ class Solution:
         :return: Subtraction of Solution instances matrices
         """
 
-        return Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, self.n_generation,
-                        mat=self.X - other.X)
+        return Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=self.X - other.X)
 
     def __getitem__(self, coords: Tuple[int, int]) -> float:
         """
@@ -149,23 +144,7 @@ class Solution:
         :return: Multiplied Solution instance
         """
 
-        return Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, self.n_generation,
-                        mat=self.X * factor)
-
-    def scale(self) -> "Solution":
-        """
-        Method to scale the Solution so it meets the constraints
-        :return: Scaled Solution
-        """
-
-        mat = self.X
-
-        for j in range(self.N):
-            col_sum = self.X[:, j].sum()
-            self.X[:, j] /= col_sum
-
-        return Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, self.n_generation,
-                        mat=mat)
+        return Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=self.X * factor)
 
     def calculate(self) -> None:
         """
@@ -173,16 +152,13 @@ class Solution:
         """
 
         income = (self.V * self.X @ self.d.T).sum()
-        cost = ((self.X.sum(axis=1) > 0).astype(int) *\
-               (self.b + self.f + (np.ceil(self.X) * self.S).sum(axis=1).reshape(self.M, 1))).sum()
-        self.penalty = self.penalty_coefficient * np.power(self.X.sum(axis=0) - 1, 2).sum()
+        are_located = (self.X.sum(axis=1) > 0).astype(int)
+        cost = (are_located * (self.b + self.f + (np.ceil(self.X) * self.S).sum(axis=1).reshape(self.M, 1))).sum()
+        equality_constraint_diff = self.X.sum(axis=0) - 1
+        inequality_constraint_diff = np.maximum(np.zeros((self.M, self.N)), self.X @ self.d.T - self.c)
+        self.penalty = self.equality_penalty_coefficient * np.power(equality_constraint_diff, 2).sum()
+        self.penalty += self.inequality_penalty_coefficient * np.power(inequality_constraint_diff, 2).sum()
         self.fitness = income - cost - self.penalty
-
-        # income = (self.V * self.X @ self.d.T).sum()
-        # cost = ((self.X.sum(axis=1) > 0).astype(int) * \
-        #         (self.b + self.f + (np.ceil(self.X) * self.S).sum(axis=1).reshape(self.M, 1))).sum()
-        # self.penalty = 1.7**self.n_generation * np.power(self.X.sum(axis=0) - 1, 2).sum()
-        # self.fitness = income - cost - self.penalty
 
     def is_feasible(self) -> bool:
         """
@@ -190,7 +166,7 @@ class Solution:
         :return: Flag informing if the solution is feasible
         """
 
-        return ((0 <= self.X) & (self.X <= 1)).all() and (self.X @ self.d.T <= self.c).all()
+        return ((0 <= self.X) & (self.X <= 1)).all()
 
     def mutate(self, n_generation: int) -> None:
         """

@@ -52,7 +52,7 @@ class Solver:
 
         # Random
         if algorithm_parameters.methods[0] == 0:
-            self.population = [Solution(problem_size, problem_parameters, algorithm_parameters, 0)
+            self.population = [Solution(problem_size, problem_parameters, algorithm_parameters)
                                for _ in range(self.population_size)]
 
         # Best or worst
@@ -60,7 +60,7 @@ class Solver:
             idx = -1 if algorithm_parameters.methods[0] == 1 else 0
 
             for _ in range(self.population_size):
-                solutions = [Solution(problem_size, problem_parameters, algorithm_parameters, 0)
+                solutions = [Solution(problem_size, problem_parameters, algorithm_parameters)
                              for _ in range(algorithm_parameters.methods_values[0])]
                 self.population.append(sorted(solutions, key=lambda sol: sol.fitness)[idx])
 
@@ -208,23 +208,11 @@ class Solver:
             mat2[:r, :] = parent2.X[:r, :]
             mat2[r:, :] = parent1.X[r:, :]
 
-            offspring1 = Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters,
-                                  parent1.n_generation, mat=mat1)
-            offspring2 = Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters,
-                                  parent2.n_generation, mat=mat2)
-
-        # Other linear
-        elif self.crossover_method == 2:
-            beta = np.random.uniform()
-
-            solutions = [(parent1 + parent2).mul(beta), parent1.mul(-beta) + parent2.mul(3 * beta),
-                         parent1.mul(3 * beta) + parent2.mul(-beta)]
-            fitnesses = [sol.fitness for sol in solutions]
-            solutions.pop(fitnesses.index(max(fitnesses)))
-            offspring1, offspring2 = solutions[0], solutions[1]
+            offspring1 = Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=mat1)
+            offspring2 = Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=mat2)
 
         # Another
-        elif self.crossover_method == 3:
+        elif self.crossover_method == 2:
             beta = np.random.uniform()
 
             if parent1.fitness > parent2.fitness:
@@ -235,28 +223,8 @@ class Solver:
                 offspring1 = parent2 - (parent2 - parent1).mul(beta)
                 offspring2 = parent1 + (parent2 - parent1).mul(beta)
 
-        # Other blend
-        elif self.crossover_method == 4:
-            mat1 = np.zeros((self.problem_size.M, self.problem_size.N))
-            mat2 = np.zeros((self.problem_size.M, self.problem_size.N))
-
-            for i in range(self.problem_size.M):
-                for j in range(self.problem_size.N):
-                    smaller = parent1[i, j] if parent1[i, j] < parent2[i, j] else parent1[i, j]
-                    bigger = parent2[i, j] if parent1[i, j] < parent2[i, j] else parent2[i, j]
-
-                    low = smaller + 0.5 * (bigger - smaller)
-                    high = bigger - 0.5 * (bigger - smaller)
-                    mat1[i, j] = np.random.uniform(low=low, high=high)
-                    mat2[i, j] = np.random.uniform(low=low, high=high)
-
-            offspring1 = Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters,
-                                  parent1.n_generation, mat=mat1)
-            offspring2 = Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters,
-                                  parent2.n_generation, mat=mat2)
-
         # Linear
-        elif self.crossover_method == 5:
+        elif self.crossover_method == 3:
             alpha = self.crossover_method_value
             solutions = [(parent1 + parent2).mul(alpha), parent1.mul(-alpha) + parent2.mul(3 * alpha),
                          parent1.mul(3 * alpha) + parent2.mul(-alpha)]
@@ -265,10 +233,9 @@ class Solver:
             offspring1, offspring2 = solutions[0], solutions[1]
 
         # Blend
-        elif self.crossover_method == 6:
+        elif self.crossover_method == 4:
             mat1 = np.zeros((self.problem_size.M, self.problem_size.N))
             mat2 = np.zeros((self.problem_size.M, self.problem_size.N))
-
             alpha = self.crossover_method_value
 
             for i in range(self.problem_size.M):
@@ -280,10 +247,8 @@ class Solver:
                     mat1[i, j] = np.random.uniform(low=low, high=high)
                     mat2[i, j] = np.random.uniform(low=low, high=high)
 
-            offspring1 = Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters,
-                                  parent1.n_generation, mat=mat1)
-            offspring2 = Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters,
-                                  parent2.n_generation, mat=mat2)
+            offspring1 = Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=mat1)
+            offspring2 = Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=mat2)
 
         # Simulated binary
         else:
@@ -317,8 +282,6 @@ class Solver:
 
                 # Selection and crossover
                 offspring1, offspring2 = self.crossover()
-                offspring1.n_generation, offspring2.n_generation = offspring1.n_generation + 1, offspring2.n_generation + 1
-                offspring1.calculate(), offspring2.calculate()
 
                 # Mutation
                 offspring1.mutate(n_generation), offspring2.mutate(n_generation)

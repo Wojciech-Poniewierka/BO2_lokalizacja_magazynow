@@ -5,11 +5,13 @@
 import tkinter as tk
 import numpy as np
 import matplotlib.pyplot as plt
+import random as rd
 
 from typing import Tuple, Optional
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 # PROJECT MODULES
+from config import TRANSPORT_COST_AMPLIFIER
 from data import ProblemSize
 
 
@@ -19,10 +21,9 @@ class Area:
     Class to represent the area
     """
 
-    def __init__(self, length: float, problem_size: ProblemSize, tab: tk.Frame) -> None:
+    def __init__(self, problem_size: ProblemSize, tab: tk.Frame) -> None:
         """
         Constructor
-        :param length: Area square side length
         :param problem_size: Problem size
         :param tab: Notebook tab
         """
@@ -34,8 +35,8 @@ class Area:
         self.problem_size = problem_size
 
         # Facilities coordinates
-        self.warehouses = np.random.uniform(low=-length, high=length, size=(problem_size.M, 2))
-        self.shops = np.random.uniform(low=-length, high=length, size=(problem_size.N, 2))
+        self.warehouses = np.random.uniform(low=-500, high=500, size=(problem_size.M, 2))
+        self.shops = np.random.uniform(low=-500, high=500, size=(problem_size.N, 2))
 
         # Distances
         self.factory_warehouses_distances = np.array([np.sqrt(x**2 + y**2)
@@ -70,10 +71,7 @@ class Area:
             for i in range(self.problem_size.M):
                 if warehouses[i] > 0:
                     x0, y0 = self.warehouses[i]
-                    ax.plot([x0, 0], [y0, 0], c="black", label="_nolegend_")
-
-                    for n, (x, y) in enumerate(self.shops):
-                        ax.plot([x0, x], [y0, y], c="black", ls='--', label="_nolegend_")
+                    ax.plot([x0, 0], [y0, 0], c="black", ls="--", label="_nolegend_")
 
         # Vertices
         ax.scatter(0, 0, s=60, c="red", label="Factory")
@@ -97,3 +95,31 @@ class Area:
         """
 
         return amplifier * self.factory_warehouses_distances, amplifier * self.shops_warehouses_distances
+
+    def calculate_coordinates(self, f: np.ndarray, S: np.ndarray) -> None:
+        """
+        Method to calculate the coordinates given the cost matrices
+        :param f: Factory to warehouses transport costs - shape: Mx1
+        :param S: Warehouses to shops transport costs - shape: MxN
+        """
+
+        self.factory_warehouses_distances = f / TRANSPORT_COST_AMPLIFIER
+        self.shops_warehouses_distances = S / TRANSPORT_COST_AMPLIFIER
+        self.warehouses = np.zeros((self.problem_size.M, 2))
+        self.shops = np.zeros((self.problem_size.N, 2))
+
+        for i in range(self.problem_size.M):
+            d = self.factory_warehouses_distances[i]
+            self.warehouses[i, 0] = np.random.uniform(low=-d, high=d)
+            self.warehouses[i, 1] = np.sqrt(self.factory_warehouses_distances[i]**2 - self.warehouses[i, 0]**2)
+
+        for j in range(self.problem_size.N):
+            low = max([self.warehouses[i, 0] - self.shops_warehouses_distances[i, j]
+                       for i in range(self.problem_size.M)])
+            high = min([self.warehouses[i, 0] + self.shops_warehouses_distances[i, j]
+                        for i in range(self.problem_size.M)])
+            self.shops[j, 0] = np.random.uniform(low=low, high=high)
+            self.shops[j, 1] = self.warehouses[0, 1] + rd.choice([-1, 1]) *\
+                               np.sqrt(self.shops_warehouses_distances[0, j]**2 - (self.shops[j, 0] - self.warehouses[0, 0])**2)
+
+        self.draw()
