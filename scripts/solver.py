@@ -211,20 +211,8 @@ class Solver:
             offspring1 = Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=mat1)
             offspring2 = Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=mat2)
 
-        # Another
-        elif self.crossover_method == 2:
-            beta = np.random.uniform()
-
-            if parent1.fitness > parent2.fitness:
-                offspring1 = parent1 - (parent1 - parent2).mul(beta)
-                offspring2 = parent2 + (parent1 - parent2).mul(beta)
-
-            else:
-                offspring1 = parent2 - (parent2 - parent1).mul(beta)
-                offspring2 = parent1 + (parent2 - parent1).mul(beta)
-
         # Linear
-        elif self.crossover_method == 3:
+        elif self.crossover_method == 2:
             alpha = self.crossover_method_value
             solutions = [(parent1 + parent2).mul(alpha), parent1.mul(-alpha) + parent2.mul(3 * alpha),
                          parent1.mul(3 * alpha) + parent2.mul(-alpha)]
@@ -233,7 +221,7 @@ class Solver:
             offspring1, offspring2 = solutions[0], solutions[1]
 
         # Blend
-        elif self.crossover_method == 4:
+        elif self.crossover_method == 3:
             mat1 = np.zeros((self.problem_size.M, self.problem_size.N))
             mat2 = np.zeros((self.problem_size.M, self.problem_size.N))
             alpha = self.crossover_method_value

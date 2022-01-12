@@ -86,19 +86,11 @@ class Application:
         # Algorithm parameters
         tk.Label(settings_frame, text="Algorithm parameters", font=BOLD_FONT).grid(row=3, column=0, columnspan=2)
         self.algorithm_parameters_entries: List[tk.Entry] = []
-        self.population_size = POPULATION_SIZE
-        self.n_generations = N_GENERATIONS
-        self.crossover_ratio = CROSSOVER_RATIO
-        self.mutation_ratio = 1 / POPULATION_SIZE
-        self.equality_penalty_coefficient = EQUALITY_PENALTY
-        self.inequality_penalty_coefficient = INEQUALITY_PENALTY
         algorithm_parameters_texts: List[str] = ["Population size", "Number of generations", "Crossover ratio",
                                                  "Mutation ratio", "Equality constraint penalty coefficient",
                                                  "Inequality constraint penalty coefficient"]
-        algorithm_parameters_default_values: List[Number] = [self.population_size, self.n_generations,
-                                                             self.crossover_ratio, self.mutation_ratio,
-                                                             self.equality_penalty_coefficient,
-                                                             self.inequality_penalty_coefficient]
+        algorithm_parameters_default_values: List[Number] = [POPULATION_SIZE, N_GENERATIONS, CROSSOVER_RATIO,
+                                                             1 / POPULATION_SIZE, EQUALITY_PENALTY, INEQUALITY_PENALTY]
 
         for i, (text, default_value) in enumerate(zip(algorithm_parameters_texts, algorithm_parameters_default_values)):
             tk.Label(settings_frame, text=text).grid(row=i + 4, column=0)
@@ -161,17 +153,17 @@ class Application:
         tk.Label(crossover_frame, text="Crossover", font=BOLD_FONT).grid(row=0, column=0, columnspan=2)
         self.crossover_method_entries: List[tk.Entry] = []
 
-        for i, method in enumerate(["Uniform", "Point", "Another"]):
+        for i, method in enumerate(["Uniform", "Point"]):
             tk.Radiobutton(crossover_frame, text=method, variable=self.methods[2], value=i,
                            command=lambda r="crossover": self.switch_entries(r)).grid(row=i + 1, column=0, sticky=tk.W)
 
         for i, (method, default_value) in enumerate([("Linear", CROSSOVER_LINEAR), ("Blend", CROSSOVER_BLEND),
                                                      ("Simulated binary", CROSSOVER_SIMULATED_BINARY)]):
-            radiobutton = tk.Radiobutton(crossover_frame, text=method, variable=self.methods[2], value=i + 3,
+            radiobutton = tk.Radiobutton(crossover_frame, text=method, variable=self.methods[2], value=i + 2,
                                          command=lambda r="crossover", idx=i: self.switch_entries(r, idx))
-            radiobutton.grid(row=i + 4, column=0, sticky=tk.W)
+            radiobutton.grid(row=i + 3, column=0, sticky=tk.W)
             self.crossover_method_entries.append(tk.Entry(crossover_frame))
-            self.crossover_method_entries[i].grid(row=i + 4, column=1, sticky=tk.W)
+            self.crossover_method_entries[i].grid(row=i + 3, column=1, sticky=tk.W)
             self.crossover_method_entries[i].insert(0, default_value)
             self.crossover_method_entries[i]["state"] = "disabled"
 
@@ -201,7 +193,7 @@ class Application:
                  justify=tk.LEFT).grid(row=1, column=0, sticky="NW")
 
         tk.Label(fitness_frame, text="Capacity constraint", font=BOLD_FONT).grid(row=2, column=0, sticky="NW")
-        self.capacity_constraint_label_text = tk.StringVar(value="Solution has not been found yet")
+        self.capacity_constraint_label_text = tk.StringVar(value="")
         tk.Label(fitness_frame, textvariable=self.capacity_constraint_label_text,
                  justify=tk.LEFT).grid(row=3, column=0, sticky="NW")
 
@@ -539,9 +531,9 @@ class Application:
         self.area = Area(self.problem_size, self.tabs[3])
 
         # Another tabs
-        sizes: List[Tuple[int, int]] = [(self.problem_size.M, 1), (self.problem_size.M, self.problem_size.N),
-                                        (self.problem_size.M, 1), (self.problem_size.M, 1), (1, self.problem_size.N),
-                                        (self.problem_size.M, self.problem_size.N)]
+        size = (self.problem_size.M, self.problem_size.N)
+        sizes: List[Tuple[int, int]] = [(size[0], 1), (size[0], size[1]), (size[0], 1), (size[0], 1), (1, size[1]),
+                                        (size[0], size[1])]
         symbols: List[str] = ["f", "S", "c", "b", "d", "V"]
         titles: List[str] = ["Factory to warehouses transport costs", "Warehouses to shops transport costs",
                  "Warehouses capacities", "Warehouses building costs", "Shops demands",
@@ -569,22 +561,18 @@ class Application:
         b, d, V = self.mats[3].array, self.mats[4].array, self.mats[5].array
 
         # Algorithm parameters
-        population_size = self.get(self.algorithm_parameters_entries[0], is_int=True, replacement=self.population_size,
-                                   warning="Population size should be a positive integer")
-        n_generations = self.get(self.algorithm_parameters_entries[1], is_int=True, replacement=self.n_generations,
-                                 warning="Number of generations should be a positive integer")
-        crossover_ratio = self.get(self.algorithm_parameters_entries[2], replacement=self.crossover_ratio,
-                                   warning="Crossover ratio should be a float from interval [0, 1]", value_range=(0, 1))
-        mutation_ratio = self.get(self.algorithm_parameters_entries[3], replacement=self.mutation_ratio,
-                                  warning="Mutation ratio should be a float from interval [0, 1]", value_range=(0, 1))
-        equality_penalty_coefficient = self.get(self.algorithm_parameters_entries[4],
-                                                replacement=self.equality_penalty_coefficient,
-                                                warning="Equality constraint penalty coefficient should be a non-negative float")
-        inequality_penalty_coefficient = self.get(self.algorithm_parameters_entries[5],
-                                                replacement=self.inequality_penalty_coefficient,
-                                                warning="Inequality constraint penalty coefficient should be a non-negative float")
-        algorithm_parameters_lst: List[float] = [population_size, n_generations, crossover_ratio, mutation_ratio,
-                                             equality_penalty_coefficient, inequality_penalty_coefficient]
+        default_values: List[Number] = [POPULATION_SIZE, N_GENERATIONS, CROSSOVER_RATIO, 1 / POPULATION_SIZE,
+                                        EQUALITY_PENALTY, INEQUALITY_PENALTY]
+        warnings: List[str] = ["Population size should be a positive integer",
+                               "Number of generations should be a positive integer",
+                               "Crossover ratio should be a float from interval [0, 1]",
+                               "Mutation ratio should be a float from interval [0, 1]",
+                               "Equality constraint penalty coefficient should be a non-negative float",
+                               "Inequality constraint penalty coefficient should be a non-negative float"]
+        algorithm_parameters_lst: List[float] = [self.get(self.algorithm_parameters_entries[i], is_int=i < 2,
+                                                          replacement=default_value, warning=warning,
+                                                          value_range=(0, 1) if i in (2, 3) else None)
+                                                 for i, (default_value, warning) in enumerate(zip(default_values, warnings))]
 
         methods: List[int] = [int(self.methods[i].get()) for i in range(4)]
         methods_values: List[Optional[Number]] = [-1 for _ in range(4)]
@@ -593,8 +581,7 @@ class Application:
 
         for i in range(2):
             if methods[0] == i + 1:
-                methods_values[0] = self.get(self.start_method_entries[i], is_int=True,
-                                             replacement=START_SOLUTION,
+                methods_values[0] = self.get(self.start_method_entries[i], is_int=True, replacement=START_SOLUTION,
                                              warning=f"{warnings[i]} start solution range should be a positive integer")
                 break
 
@@ -635,9 +622,7 @@ class Application:
             return None
 
         problem_parameters = ProblemParameters(f, S, c, b, d, V)
-        algorithm_parameters = AlgorithmParameters(population_size, n_generations, crossover_ratio, mutation_ratio,
-                                                   equality_penalty_coefficient, inequality_penalty_coefficient,
-                                                   methods, methods_values)
+        algorithm_parameters = AlgorithmParameters(methods, methods_values, *algorithm_parameters_lst)
 
         # Solver
         solver = Solver(self.problem_size, problem_parameters, algorithm_parameters)
@@ -648,10 +633,7 @@ class Application:
 
         # Result
         self.fitness_label_text.set(best_solution.fitness)
-        fill = np.zeros((self.problem_size.M, 1)) - 1
-        c = np.concatenate((best_solution.X @ best_solution.d.T, fill), axis=1)
-        c = np.concatenate((c, best_solution.c), axis=1)
-        self.capacity_constraint_label_text.set(display(c))
+        self.capacity_constraint_label_text.set(display(best_solution.X @ best_solution.d.T, c))
         self.solution_label_text.set(best_solution)
 
         # Best solutions' plots
@@ -673,8 +655,8 @@ class Application:
         for ax, values in zip((ax1, ax2), (fitnesses, penalties)):
             factor = 0.1 if len(np.unique(values)) == 1 else 0
             step = 100 if len(np.unique(values)) == 1 and penalties[0] == 0 else 0
-            ax.plot(*range(1, self.n_generations + 1), values)
-            ax.axis([1, self.n_generations, (1 - factor) * min(values) - step, (1 + factor) * max(values) + step])
+            ax.plot([i for i in range(N_GENERATIONS + 1)], [0] + values)
+            ax.axis([1, N_GENERATIONS, (1 - factor) * min(values) - step, (1 + factor) * max(values) + step])
             ax.grid()
 
         plt.show()
@@ -683,18 +665,22 @@ class Application:
         self.area.draw(warehouses=np.array([best_solution.X[i, :].sum() > 0 for i in range(self.problem_size.M)]))
 
 
-def display(array: np.ndarray) -> str:
+def display(space: np.ndarray, c: np.ndarray) -> str:
     """
-    Function to display the matrix
-    :param array: Matrix
-    :return: String representation
+    Function to display the capacity constraint
+    :param space: Spaced taken by the goods
+    :param c: Warehouses capacities, shape: Mx1
+    :return: String displaying if the constraint has been met
     """
 
-    M, N = array.shape
+    mat: List[str] = []
 
-    return "\n".join(["".join(["<=".center(9) if elem < 0 else
-                               str(round(elem, 2)).ljust(10 - len(str(round(elem, 2))))
-                               for elem in array[i, :]]) for i in range(M)])
+    for i in range(len(c)):
+        row: List[str] = [str(round(space[i, 0], 2)), str(round(c[i, 0], 2))]
+        row_rep = row[0].ljust(10 - len(row[0])) + "<=".center(10) + row[1].ljust(10 - len(row[1]))
+        mat.append(row_rep)
+
+    return "\n".join(mat)
 
 
 # MAIN

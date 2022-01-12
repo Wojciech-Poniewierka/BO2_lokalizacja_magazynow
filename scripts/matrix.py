@@ -45,6 +45,8 @@ class Matrix:
 
         self.display_frame = tk.Frame(master)
         self.display_frame.pack()
+        self.display_label_text = tk.StringVar("")
+        tk.Label(self.display_frame, textvariable=self.display_label_text, pady=10, justify=tk.LEFT).grid()
 
         warning_frame = tk.Frame(master)
         warning_frame.pack()
@@ -122,22 +124,21 @@ class Matrix:
         Method to display the matrix
         """
 
-        array = np.around(self.array, decimals=2)
+        self.array = np.around(self.array, decimals=2)
 
-        for widget in self.display_frame.winfo_children():
-            widget.destroy()
+        mat = "\n".join(["".join([str(elem).ljust(10 - len(str(elem))) for elem in self.array[i, :]])
+                         for i in range(self.M)])
 
-        mat = "\n".join([" ".join([str(round(elem, 2)).center(9) for elem in array[i, :]]) for i in range(self.M)])
-        tk.Label(self.display_frame, text=f"\nMatrix:\n{mat}").grid()
+        self.display_label_text.set(f"Matrix:\n{mat}")
 
         if self.state == "normal":
-            for i, row in enumerate(array):
+            for i, row in enumerate(self.array):
                 for j, elem in enumerate(row):
                     self.cells[i][j].delete(0, tk.END)
                     self.cells[i][j].insert(0, elem)
 
         else:
-            for i, row in enumerate(array):
+            for i, row in enumerate(self.array):
                 for j, elem in enumerate(row):
                     self.cells[i][j]["state"] = "normal"
                     self.cells[i][j].delete(0, tk.END)
