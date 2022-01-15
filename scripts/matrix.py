@@ -43,11 +43,6 @@ class Matrix:
         self.insert_frame = tk.Frame(master)
         self.insert_frame.pack()
 
-        self.display_frame = tk.Frame(master)
-        self.display_frame.pack()
-        self.display_label_text = tk.StringVar("")
-        tk.Label(self.display_frame, textvariable=self.display_label_text, pady=10, justify=tk.LEFT).grid()
-
         warning_frame = tk.Frame(master)
         warning_frame.pack()
 
@@ -60,12 +55,13 @@ class Matrix:
             row = []
 
             for j in range(self.N):
-                cell = tk.Entry(self.insert_frame, fg=TEXT_COLOR, bg="white", width=8, state=self.state)
+                cell = tk.Entry(self.insert_frame, fg=TEXT_COLOR, bg="white", width=8, state=self.state,
+                                justify=tk.CENTER, font=("Garamond", 10, "bold"))
                 cell.grid(row=i, column=j)
-                cell.bind("<Up>", lambda event: self.move_up())
-                cell.bind("<Down>", lambda event: self.move_down())
-                cell.bind("<Right>", lambda event: self.move_right())
-                cell.bind("<Left>", lambda event: self.move_left())
+                cell.bind("<Up>", lambda event: self.move("up"))
+                cell.bind("<Down>", lambda event: self.move("down"))
+                cell.bind("<Right>", lambda event: self.move("right"))
+                cell.bind("<Left>", lambda event: self.move("left"))
                 row.append(cell)
 
             self.cells.append(row)
@@ -87,37 +83,25 @@ class Matrix:
                 if self.cells[i][j] is current_cell:
                     return i, j
 
-    def move_up(self) -> None:
+    def move(self, direction: str) -> None:
         """
-        Method to move to the cell above
-        """
-
-        i, j = self.get_cursor_location()
-        self.cells[max(i - 1, 0)][j].focus()
-
-    def move_down(self) -> None:
-        """
-        Method to move to the cell below
+        Method to move to the cell around
+        :param direction: Direction
         """
 
         i, j = self.get_cursor_location()
-        self.cells[min(i + 1, self.M - 1)][j].focus()
 
-    def move_right(self) -> None:
-        """
-        Method to move to the cell on the right
-        """
+        if direction == "up":
+            self.cells[max(i - 1, 0)][j].focus()
 
-        i, j = self.get_cursor_location()
-        self.cells[i][min(j + 1, self.N - 1)].focus()
+        elif direction == "down":
+            self.cells[min(i + 1, self.M - 1)][j].focus()
 
-    def move_left(self) -> None:
-        """
-        Method to move to the cell on the left
-        """
+        elif direction == "right":
+            self.cells[i][min(j + 1, self.N - 1)].focus()
 
-        i, j = self.get_cursor_location()
-        self.cells[i][max(j - 1, 0)].focus()
+        else:
+            self.cells[i][max(j - 1, 0)].focus()
 
     def display(self) -> None:
         """
@@ -125,11 +109,6 @@ class Matrix:
         """
 
         self.array = np.around(self.array, decimals=2)
-
-        mat = "\n".join(["".join([str(elem).ljust(10 - len(str(elem))) for elem in self.array[i, :]])
-                         for i in range(self.M)])
-
-        self.display_label_text.set(f"Matrix:\n{mat}")
 
         if self.state == "normal":
             for i, row in enumerate(self.array):

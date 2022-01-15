@@ -4,7 +4,7 @@
 # BUILT-IN MODULES
 import numpy as np
 
-from typing import Tuple, Optional, Union
+from typing import Tuple, Optional, Union, List
 
 # PROJECT MODULES
 from data import ProblemSize, ProblemParameters, AlgorithmParameters
@@ -53,28 +53,40 @@ class Solution:
         self.mutation_method_value = algorithm_parameters.methods_values[3]
 
         # Fitness
-        self.fitness, self.penalty = 0, 0
+        self.fitness, self.penalty_equality, self.penalty_inequality = 0, 0, 0
 
         # Decision variables matrix
         if mat is None:
-            self.X = np.random.uniform(size=(self.M, self.N))
-
-            for j in range(self.N):
-                col_sum = self.X[:, j].sum()
-                self.X[:, j] /= col_sum
-
-            while (self.X @ self.d.T > self.c).any():
+            while True:
                 self.X = np.random.uniform(size=(self.M, self.N))
 
                 for j in range(self.N):
                     col_sum = self.X[:, j].sum()
                     self.X[:, j] /= col_sum
 
-            self.calculate()
+                if (self.X @ self.d.T <= self.c).all():
+                    break
+
+            # self.X = np.zeros((self.M, self.N))
+            # indexes_to_omit: List[Tuple[int, int]] = [(np.random.randint(self.M), j) for j in range(self.N)]
+            #
+            # while True:
+            #     indexes_to_draw = [(i, j) for j in range(self.N) for i in range(self.M) if (i, j) not in indexes_to_omit]
+            #
+            #     while indexes_to_draw:
+            #         i, j = indexes_to_draw.pop(np.random.randint(len(indexes_to_draw)))
+            #         self.X[i, j] = np.random.uniform(low=0, high=1 - self.X[:, j].sum())
+            #
+            #     for i, j in indexes_to_omit:
+            #         self.X[i, j] = 1 - self.X[:, j].sum()
+            #
+            #     if (self.X @ self.d.T <= self.c).all():
+            #         break
 
         else:
             self.X = mat
-            self.calculate()
+
+        self.calculate()
 
     def __eq__(self, other: "Solution") -> bool:
         """
@@ -156,9 +168,9 @@ class Solution:
         cost = (are_located * (self.b + self.f + (np.ceil(self.X) * self.S).sum(axis=1).reshape(self.M, 1))).sum()
         equality_constraint_diff = self.X.sum(axis=0) - 1
         inequality_constraint_diff = np.maximum(np.zeros((self.M, self.N)), self.X @ self.d.T - self.c)
-        self.penalty = self.equality_penalty_coefficient * np.power(equality_constraint_diff, 2).sum()
-        self.penalty += self.inequality_penalty_coefficient * np.power(inequality_constraint_diff, 2).sum()
-        self.fitness = income - cost - self.penalty
+        self.penalty_equality = self.equality_penalty_coefficient**3 * abs(equality_constraint_diff.sum())
+        self.penalty_inequality = self.inequality_penalty_coefficient**3 * abs(inequality_constraint_diff.sum())
+        self.fitness = income - cost - self.penalty_equality - self.penalty_inequality
 
     def is_feasible(self) -> bool:
         """

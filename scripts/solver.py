@@ -4,6 +4,8 @@
 # BUILT-IN MODULES
 import numpy as np
 import pandas as pd
+import tkinter as tk
+import tkinter.ttk as ttk
 
 from typing import Tuple, List
 
@@ -19,12 +21,14 @@ class Solver:
     """
 
     def __init__(self, problem_size: ProblemSize, problem_parameters: ProblemParameters,
-                 algorithm_parameters: AlgorithmParameters) -> None:
+                 algorithm_parameters: AlgorithmParameters,
+                 progress_with_frame: Tuple[ttk.Progressbar, tk.Frame]) -> None:
         """
         Constructor
         :param problem_size: Problem size
         :param problem_parameters: Problem parameters
         :param algorithm_parameters: Algorithm parameters
+        :param progress_with_frame: Progress bar with its frame
         """
 
         # Problem size
@@ -42,7 +46,11 @@ class Solver:
         self.selection_method = algorithm_parameters.methods[1]
         self.selection_method_value = algorithm_parameters.methods_values[1]
         self.crossover_method = algorithm_parameters.methods[2]
-        self.crossover_method_value = algorithm_parameters.methods[2]
+        self.crossover_method_value = algorithm_parameters.methods_values[2]
+
+        # Progress bar
+        self.progress, self.progress_frame = progress_with_frame
+        self.progress["value"] = 0
 
         # Number of parent in the sorting grouping strategy
         self.n_parent = 0
@@ -113,7 +121,7 @@ class Solver:
             eta = self.selection_method_value
 
             for i in range(1, self.population_size + 1):
-                wheel[i] = (eta - 2 * (eta - 1) * (i - 1) / (self.population_size - 1)) / self.population_size + wheel[i - 1]
+                wheel[i] = eta + 2 * (1 - eta) * (i - 1) / (self.population_size - 1) + wheel[i - 1]
 
         else:
             q = self.selection_method_value
@@ -122,7 +130,7 @@ class Solver:
                 wheel[i] = q * (1 - q)**(i - 1) + wheel[i - 1]
 
         # Draw a random solution
-        r = np.random.uniform()
+        r = np.random.uniform(low=0, high=wheel.sum())
 
         for i in range(self.population_size):
             if wheel[i] < r < wheel[i + 1]:
@@ -172,9 +180,9 @@ class Solver:
             parent1 = self.rank()
             parent2 = self.rank()
 
-            while parent1 == parent2:
-                parent1 = self.rank()
-                parent2 = self.rank()
+            # while parent1 == parent2:
+            #     parent1 = self.rank()
+            #     parent2 = self.rank()
 
             return parent1, parent2
 
@@ -260,10 +268,20 @@ class Solver:
         """
 
         history: List[Solution] = []
+        progress_ticks: int = 10
 
         for n_generation in range(self.n_generations):
+            if n_generation > self.n_generations / 100 * progress_ticks - 1:
+                progress_ticks += 10
+                self.progress["value"] = progress_ticks
+                self.progress_frame.update_idletasks()
+
             new_generation: List[Solution] = []
             self.sorted_population = sorted(self.population, key=lambda sol: sol.fitness, reverse=True)
+
+            if n_generation == 0:
+                print(self.sorted_population[0].X)
+
             history.append(self.sorted_population[0])
 
             for _ in range(0, self.population_size, 2):
@@ -275,7 +293,7 @@ class Solver:
                 offspring1.mutate(n_generation), offspring2.mutate(n_generation)
                 new_generation.append(offspring1), new_generation.append(offspring2)
 
-            self.population = new_generation
+            self.population = sorted(self.population + new_generation, key=lambda sol: sol.fitness, reverse=True)[:self.population_size]
 
         return history
 

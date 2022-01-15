@@ -18,6 +18,7 @@ from data import ProblemSize, ProblemParameters, AlgorithmParameters
 from area import Area
 from matrix import Matrix
 from solver import Solver
+from solution import Solution
 
 
 # ROOT
@@ -51,14 +52,10 @@ class Application:
         main_tab.grid_rowconfigure(0, weight=1), main_tab.grid_rowconfigure(1, weight=1)
         main_tab.grid_columnconfigure(0, weight=1), main_tab.grid_columnconfigure(1, weight=1)
 
-        settings_frame = tk.Frame(main_tab)
-        settings_frame.grid(row=0, column=0, sticky="NW")
-        methods_frame = tk.Frame(main_tab)
-        methods_frame.grid(row=0, column=1, sticky="NW")
-        fitness_frame = tk.Frame(main_tab)
-        fitness_frame.grid(row=1, column=0, sticky="NW")
-        solution_frame = tk.Frame(main_tab)
-        solution_frame.grid(row=1, column=1, sticky="NW")
+        frames: List[tk.Frame] = [tk.Frame(main_tab) for _ in range(3)]
+
+        for i, frame in enumerate(frames):
+            frame.grid(row=i % 2, column=i // 2, rowspan=i // 2 + 1, sticky="NW")
 
         plot_tab = tk.Frame(self.notebook, highlightbackground=HIGHLIGHT, highlightthickness=BORDER)
         generator_tab = tk.Frame(self.notebook, highlightbackground=HIGHLIGHT, highlightthickness=BORDER)
@@ -69,22 +66,26 @@ class Application:
         self.tabs = [main_tab, plot_tab, generator_tab]
         #--------------------------------------------------------------------------------------------------------------#
         # Buttons
-        self.dim_button = tk.Button(settings_frame, text="Choose problem size", command=self.determine_size)
+        self.dim_button = tk.Button(frames[0], text="Choose problem size", command=self.determine_size)
         self.dim_button.grid(row=0, column=0, ipadx=10, ipady=10)
 
-        self.run_button = tk.Button(settings_frame, text="Run algorithm", command=self.run, state="disabled")
+        self.run_button = tk.Button(frames[0], text="Run algorithm", command=self.run, state="disabled")
         self.run_button.grid(row=0, column=1, ipadx=10, ipady=10)
 
+        progress = ttk.Progressbar(frames[0], orient=tk.HORIZONTAL, mode="determinate")
+        progress.grid(row=0, column=2)
+        self.progress_with_frame: Tuple[ttk.Progressbar, tk.Frame] = (progress, frames[0])
+
         # Problem size
-        tk.Label(settings_frame, text="Problem size", font=BOLD_FONT).grid(row=1, column=0, columnspan=2)
-        self.size_entries: List[tk.Entry] = [tk.Entry(settings_frame), tk.Entry(settings_frame)]
+        tk.Label(frames[0], text="Problem size", font=BOLD_FONT).grid(row=1, column=0, columnspan=2)
+        self.size_entries: List[tk.Entry] = [tk.Entry(frames[0]), tk.Entry(frames[0])]
 
         for i, dimension in enumerate(PROBLEM_SIZE):
             self.size_entries[i].grid(row=2, column=i)
             self.size_entries[i].insert(0, dimension)
 
         # Algorithm parameters
-        tk.Label(settings_frame, text="Algorithm parameters", font=BOLD_FONT).grid(row=3, column=0, columnspan=2)
+        tk.Label(frames[0], text="Algorithm parameters", font=BOLD_FONT).grid(row=3, column=0, columnspan=2)
         self.algorithm_parameters_entries: List[tk.Entry] = []
         algorithm_parameters_texts: List[str] = ["Population size", "Number of generations", "Crossover ratio",
                                                  "Mutation ratio", "Equality constraint penalty coefficient",
@@ -93,116 +94,71 @@ class Application:
                                                              1 / POPULATION_SIZE, EQUALITY_PENALTY, INEQUALITY_PENALTY]
 
         for i, (text, default_value) in enumerate(zip(algorithm_parameters_texts, algorithm_parameters_default_values)):
-            tk.Label(settings_frame, text=text).grid(row=i + 4, column=0)
-            algorithm_parameters_entry = tk.Entry(settings_frame)
+            tk.Label(frames[0], text=text).grid(row=i + 4, column=0)
+            algorithm_parameters_entry = tk.Entry(frames[0])
             algorithm_parameters_entry.grid(row=i + 4, column=1)
             algorithm_parameters_entry.insert(0, default_value)
             self.algorithm_parameters_entries.append(algorithm_parameters_entry)
 
         # Warning labels
-        tk.Label(settings_frame, text="Warnings", font=BOLD_FONT).grid(row=10, column=0, columnspan=2)
+        tk.Label(frames[0], text="Warnings", font=BOLD_FONT).grid(row=10, column=0, columnspan=2)
         self.size_warning_label_text = tk.StringVar(value="")
-        tk.Label(settings_frame, textvariable=self.size_warning_label_text,
+        tk.Label(frames[0], textvariable=self.size_warning_label_text,
                  justify=tk.LEFT).grid(row=11, column=0, columnspan=2)
         self.main_warning_label_text = tk.StringVar(value="")
-        tk.Label(settings_frame, textvariable=self.main_warning_label_text,
+        tk.Label(frames[0], textvariable=self.main_warning_label_text,
                  justify=tk.LEFT).grid(row=12, column=0, columnspan=2)
         #--------------------------------------------------------------------------------------------------------------#
         # Radio buttons
         self.methods: List[tk.IntVar] = [tk.IntVar() for _ in range(4)]
+        methods_frames: List[tk.Frame] = [tk.Frame(frames[1]) for _ in range(4)]
 
-        start_frame = tk.Frame(methods_frame)
-        start_frame.grid(row=0, column=0, sticky="NW", pady=(0, 10))
-        tk.Label(start_frame, text="Start solution", font=BOLD_FONT).grid(row=0, column=0, columnspan=2)
-        self.start_method_entries: List[tk.Entry] = []
+        for i, text in enumerate(["Start solution", "Selection", "Crossover", "Mutation"]):
+            methods_frames[i].grid(row=i // 2, column=i % 2, sticky="NW", pady=(0, 10))
+            tk.Label(methods_frames[i], text=text, font=BOLD_FONT).grid(row=0, column=0, columnspan=2)
 
-        tk.Radiobutton(start_frame, text="Random", variable=self.methods[0], value=0,
-                       command=lambda r="start": self.switch_entries(r)).grid(row=1, column=0, sticky=tk.W)
+        methods_info: List[List[Tuple[str, Optional[Number]]]] = [[("Random", None), ("Best", START_SOLUTION),
+            ("Worst", START_SOLUTION)], [("Roulette wheel", None),
+            ("Sorting grouping strategy", SELECTION_SORTING_GROUPING_STRATEGY), ("Tournament", SELECTION_TOURNAMENT),
+            ("Linear rank", SELECTION_LINEAR_RANK), ("Non-linear rank", SELECTION_NON_LINEAR_RANK)], [("Uniform", None),
+            ("Point", None), ("Linear", CROSSOVER_LINEAR), ("Blend", CROSSOVER_BLEND),
+            ("Simulated binary", CROSSOVER_SIMULATED_BINARY)], [("Swap", None), ("Borrow", None),
+            ("Non-uniform", PROBLEM_SIZE[0] * PROBLEM_SIZE[1]), ("Polynomial", MUTATION_POLYNOMIAL)]]
+        self.methods_entries: List[List[tk.Entry]] = [[] for _ in range(4)]
 
-        for i, method in enumerate(["Best", "Worst"]):
-            radiobutton = tk.Radiobutton(start_frame, text=method, variable=self.methods[0], value=i + 1,
-                                         command=lambda r="start", idx=i: self.switch_entries(r, idx))
-            radiobutton.grid(row=i + 2, column=0, sticky=tk.W)
-            self.start_method_entries.append(tk.Entry(start_frame))
-            self.start_method_entries[i].grid(row=i + 2, column=1, sticky=tk.W)
-            self.start_method_entries[i].insert(0, START_SOLUTION)
-            self.start_method_entries[i]["state"] = "disabled"
+        for i, method_info in enumerate(methods_info):
+            for j, (text, value) in enumerate(method_info):
+                b = tk.Radiobutton(methods_frames[i], text=text, variable=self.methods[i], value=j,
+                    command=lambda r=i, idx=None if value is None else len(self.methods_entries[i]):
+                    self.switch_entries(r, idx=idx))
+                b.grid(row=j + 1, column=0, sticky=tk.W)
 
-        selection_frame = tk.Frame(methods_frame)
-        selection_frame.grid(row=0, column=1, sticky="NW", pady=(0, 10))
-        tk.Label(selection_frame, text="Selection", font=BOLD_FONT).grid(row=0, column=0, columnspan=2)
-        self.selection_method_entries: List[tk.Entry] = []
-
-        tk.Radiobutton(selection_frame, text="Roulette wheel", variable=self.methods[1], value=0,
-                       command=lambda r="selection": self.switch_entries(r)).grid(row=1, column=0, sticky=tk.W)
-
-        for i, (method, default_value) in enumerate([("Sorting grouping strategy", SELECTION_SORTING_GROUPING_STRATEGY),
-                                                     ("Tournament", SELECTION_TOURNAMENT),
-                                                     ("Linear rank", SELECTION_LINEAR_RANK),
-                                                     ("Non-linear rank", SELECTION_NON_LINEAR_RANK)]):
-            radiobutton = tk.Radiobutton(selection_frame, text=method, variable=self.methods[1], value=i + 1,
-                                         command=lambda r="selection", idx=i: self.switch_entries(r, idx))
-            radiobutton.grid(row=i + 2, column=0, sticky=tk.W)
-            self.selection_method_entries.append(tk.Entry(selection_frame))
-            self.selection_method_entries[i].grid(row=i + 2, column=1, sticky=tk.W)
-            self.selection_method_entries[i].insert(0, default_value)
-            self.selection_method_entries[i]["state"] = "disabled"
-
-        crossover_frame = tk.Frame(methods_frame)
-        crossover_frame.grid(row=1, column=0, sticky="NW", pady=(0, 10))
-        tk.Label(crossover_frame, text="Crossover", font=BOLD_FONT).grid(row=0, column=0, columnspan=2)
-        self.crossover_method_entries: List[tk.Entry] = []
-
-        for i, method in enumerate(["Uniform", "Point"]):
-            tk.Radiobutton(crossover_frame, text=method, variable=self.methods[2], value=i,
-                           command=lambda r="crossover": self.switch_entries(r)).grid(row=i + 1, column=0, sticky=tk.W)
-
-        for i, (method, default_value) in enumerate([("Linear", CROSSOVER_LINEAR), ("Blend", CROSSOVER_BLEND),
-                                                     ("Simulated binary", CROSSOVER_SIMULATED_BINARY)]):
-            radiobutton = tk.Radiobutton(crossover_frame, text=method, variable=self.methods[2], value=i + 2,
-                                         command=lambda r="crossover", idx=i: self.switch_entries(r, idx))
-            radiobutton.grid(row=i + 3, column=0, sticky=tk.W)
-            self.crossover_method_entries.append(tk.Entry(crossover_frame))
-            self.crossover_method_entries[i].grid(row=i + 3, column=1, sticky=tk.W)
-            self.crossover_method_entries[i].insert(0, default_value)
-            self.crossover_method_entries[i]["state"] = "disabled"
-
-        mutation_frame = tk.Frame(methods_frame)
-        mutation_frame.grid(row=1, column=1, sticky="NW", pady=(0, 10))
-        tk.Label(mutation_frame, text="Mutation", font=BOLD_FONT).grid(row=0, column=0, columnspan=2)
-        self.mutation_method_entries: List[tk.Entry] = []
-
-        for i, method in enumerate(["Swap", "Borrow"]):
-            tk.Radiobutton(mutation_frame, text=method, variable=self.methods[3], value=i,
-                           command=lambda r="mutation": self.switch_entries(r)).grid(row=i + 1, column=0, sticky=tk.W)
-
-        for i, (method, default_value) in enumerate([("Non-uniform", PROBLEM_SIZE[0] * PROBLEM_SIZE[1]),
-                                                     ("Polynomial", MUTATION_POLYNOMIAL)]):
-            radiobutton = tk.Radiobutton(mutation_frame, text=method, variable=self.methods[3], value=i + 2,
-                           command=lambda r="mutation", idx=i: self.switch_entries(r, idx))
-            radiobutton.grid(row=i + 3, column=0, sticky=tk.W)
-            self.mutation_method_entries.append(tk.Entry(mutation_frame))
-            self.mutation_method_entries[i].grid(row=i + 3, column=1, sticky=tk.W)
-            self.mutation_method_entries[i].insert(0, default_value)
-            self.mutation_method_entries[i]["state"] = "disabled"
+                if value is not None:
+                    self.methods_entries[i].append(tk.Entry(methods_frames[i]))
+                    self.methods_entries[i][-1].grid(row=j + 1, column=1, sticky=tk.W)
+                    self.methods_entries[i][-1].insert(0, value)
+                    self.methods_entries[i][-1]["state"] = "disabled"
         #--------------------------------------------------------------------------------------------------------------#
         # Result label
-        tk.Label(fitness_frame, text="Fitness", font=BOLD_FONT).grid(row=0, column=0, sticky="NW")
-        self.fitness_label_text = tk.StringVar(value="")
-        tk.Label(fitness_frame, textvariable=self.fitness_label_text,
-                 justify=tk.LEFT).grid(row=1, column=0, sticky="NW")
+        tk.Label(frames[2], text="Start solution", font=BOLD_FONT).grid(row=0, column=0)
+        self.start_solution_frame: tk.Frame = tk.Frame(frames[2])
+        self.start_solution_frame.grid(row=1, column=0)
 
-        tk.Label(fitness_frame, text="Capacity constraint", font=BOLD_FONT).grid(row=2, column=0, sticky="NW")
-        self.capacity_constraint_label_text = tk.StringVar(value="")
-        tk.Label(fitness_frame, textvariable=self.capacity_constraint_label_text,
-                 justify=tk.LEFT).grid(row=3, column=0, sticky="NW")
+        tk.Label(frames[2], text="Start solution fitness", font=BOLD_FONT).grid(row=2, column=0)
+        self.start_fitness_frame: tk.Frame = tk.Frame(frames[2])
+        self.start_fitness_frame.grid(row=3, column=0)
 
-        tk.Label(solution_frame, text="Solution", font=BOLD_FONT).grid(row=0, column=0, columnspan=2, sticky="NW")
-        tk.Label(solution_frame, text="Shops", font=("Garamond", 14, "bold")).grid(row=1, column=1)
-        self.solution_label_text = tk.StringVar(value="Solution has not been found yet")
-        tk.Label(solution_frame, textvariable=self.solution_label_text,
-                 justify=tk.LEFT).grid(row=2, column=1, sticky="NW")
-        tk.Label(solution_frame, text="Warehouses", font=("Garamond", 14, "bold")).grid(row=2, column=0)
+        tk.Label(frames[2], text="Best solution", font=BOLD_FONT).grid(row=4, column=0)
+        self.best_solution_frame: tk.Frame = tk.Frame(frames[2])
+        self.best_solution_frame.grid(row=5, column=0)
+
+        tk.Label(frames[2], text="Best solution fitness", font=BOLD_FONT).grid(row=6, column=0)
+        self.best_fitness_frame: tk.Frame = tk.Frame(frames[2])
+        self.best_fitness_frame.grid(row=7, column=0)
+
+        tk.Label(frames[2], text="Capacity constraint", font=BOLD_FONT).grid(row=8, column=0)
+        self.constraint_frame: tk.Frame = tk.Frame(frames[2])
+        self.constraint_frame.grid(row=9, column=0)
         #--------------------------------------------------------------------------------------------------------------#
         # Problem parameters
         generator_frame = tk.Frame(generator_tab)
@@ -263,18 +219,15 @@ class Application:
 
         self.building_cost_amplifier: Optional[Number] = None
 
-    def switch_entries(self, radiobutton_type: str, *idx: int) -> None:
+    def switch_entries(self, radiobutton_type: int, idx: Optional[int]) -> None:
         """
         Method to switch on/off the entries
-        :param radiobutton_type: Radiobutton type
+        :param radiobutton_type: Radiobutton type number
         :param idx: Index of the entry to switch on
         """
 
-        d = {"start": self.start_method_entries, "selection": self.selection_method_entries,
-             "crossover": self.crossover_method_entries, "mutation": self.mutation_method_entries}
-
-        for i, entry in enumerate(d[radiobutton_type]):
-            entry["state"] = "normal" if i in idx else "disabled"
+        for i, entry in enumerate(self.methods_entries[radiobutton_type]):
+            entry["state"] = "normal" if i == idx else "disabled"
 
     def generate(self, idx: int) -> None:
         """
@@ -554,7 +507,7 @@ class Application:
         """
 
         # Clear the labels
-        self.main_warning_label_text.set(""), self.solution_label_text.set(""), self.fitness_label_text.set("")
+        self.main_warning_label_text.set("")
 
         # Problem parameters
         f, S, c = self.mats[0].array, self.mats[1].array, self.mats[2].array
@@ -570,53 +523,41 @@ class Application:
                                "Equality constraint penalty coefficient should be a non-negative float",
                                "Inequality constraint penalty coefficient should be a non-negative float"]
         algorithm_parameters_lst: List[float] = [self.get(self.algorithm_parameters_entries[i], is_int=i < 2,
-                                                          replacement=default_value, warning=warning,
-                                                          value_range=(0, 1) if i in (2, 3) else None)
-                                                 for i, (default_value, warning) in enumerate(zip(default_values, warnings))]
+                                    replacement=default_value, warning=warning,
+                                    value_range=(0, 1) if i in (2, 3) else None)
+                                    for i, (default_value, warning) in enumerate(zip(default_values, warnings))]
 
         methods: List[int] = [int(self.methods[i].get()) for i in range(4)]
         methods_values: List[Optional[Number]] = [-1 for _ in range(4)]
 
-        warnings: List[str] = ["Best", "Start"]
+        if methods[0] > 0:
+            warnings: List[str] = ["Best", "Start"]
+            methods_values[0] = self.get(self.methods_entries[0][methods[0] - 1], is_int=True, replacement=START_SOLUTION,
+                                         warning=f"{warnings[methods[0] - 1]} start solution range should be a positive integer")
 
-        for i in range(2):
-            if methods[0] == i + 1:
-                methods_values[0] = self.get(self.start_method_entries[i], is_int=True, replacement=START_SOLUTION,
-                                             warning=f"{warnings[i]} start solution range should be a positive integer")
-                break
+        if methods[1] > 0:
+            replacements: List[Number] = [SELECTION_SORTING_GROUPING_STRATEGY, SELECTION_TOURNAMENT, SELECTION_LINEAR_RANK,
+                                          SELECTION_NON_LINEAR_RANK]
+            warnings: List[str] = ["Sorting grouping strategy selection offset should be a non-negative integer",
+                                   "Tournament selection participants number should be a positive integer",
+                                   "Linear rank selection coefficient should be a float from interval (1, 2)",
+                                   "Non-linear rank selection coefficient should be a float from interval (0, 1)"]
+            value_ranges: List[Optional[Tuple[int, int]]] = [None, None, (1, 2), (0, 1)]
+            methods_values[1] = self.get(self.methods_entries[1][methods[1] - 1], is_int=methods[1] < 3,
+                                         replacement=replacements[methods[1] - 1], warning=warnings[methods[1] - 1],
+                                         value_range=value_ranges[methods[1] - 1])
 
-        replacements: List[Number] = [SELECTION_SORTING_GROUPING_STRATEGY, SELECTION_TOURNAMENT, SELECTION_LINEAR_RANK,
-                                      SELECTION_NON_LINEAR_RANK]
-        warnings: List[str] = ["Sorting grouping strategy selection offset should be a non-negative integer",
-                               "Tournament selection participants number should be a positive integer",
-                               "Linear rank selection coefficient should be a float from interval (1, 2)",
-                               "Non-linear rank selection coefficient should be a float from interval (0, 1)"]
-        value_range: List[Optional[Tuple[int, int]]] = [None, None, (1, 2), (0, 1)]
+        if methods[2] > 1:
+            replacements: List[Number] = [CROSSOVER_LINEAR, CROSSOVER_BLEND, CROSSOVER_SIMULATED_BINARY]
+            warnings: List[str] = ["Linear", "Blend", "Simulated binary"]
+            methods_values[2] = self.get(self.methods_entries[2][methods[2] - 2], replacement=replacements[methods[2] - 2],
+                                         warning=f"{warnings[methods[2] - 2]} crossover coefficient should be a positive float")
 
-        for i in range(4):
-            if methods[1] == i + 1:
-                methods_values[1] = self.get(self.selection_method_entries[i], is_int=i < 2,
-                                             replacement=replacements[i], warning=warnings[i],
-                                             value_range=value_range[i])
-                break
-
-        replacements: List[Number] = [CROSSOVER_LINEAR, CROSSOVER_BLEND, CROSSOVER_SIMULATED_BINARY]
-        warnings: List[str] = ["Linear", "Blend", "Simulated binary"]
-
-        for i in range(3):
-            if methods[2] == i + 5:
-                methods_values[2] = self.get(self.crossover_method_entries[i], replacement=replacements[i],
-                                             warning=f"{warnings[i]} crossover coefficient should be a positive float")
-                break
-
-        replacements: List[Number] = [PROBLEM_SIZE[0] * PROBLEM_SIZE[1], MUTATION_POLYNOMIAL]
-        warnings: List[str] = ["Non-uniform", "Polynomial"]
-
-        for i in range(2):
-            if methods[3] == i + 2:
-                methods_values[3] = self.get(self.mutation_method_entries[i], replacement=replacements[i],
-                                             warning=f"{warnings[i]} mutation coefficient should be a positive float")
-                break
+        if methods[3] > 1:
+            replacements: List[Number] = [PROBLEM_SIZE[0] * PROBLEM_SIZE[1], MUTATION_POLYNOMIAL]
+            warnings: List[str] = ["Non-uniform", "Polynomial"]
+            methods_values[3] = self.get(self.methods_entries[3][methods[3] - 2], replacement=replacements[methods[3] - 2],
+                                         warning=f"{warnings[methods[3] - 2]} mutation coefficient should be a positive float")
 
         if any([elem is None for elem in algorithm_parameters_lst + methods_values]):
             return None
@@ -625,16 +566,42 @@ class Application:
         algorithm_parameters = AlgorithmParameters(methods, methods_values, *algorithm_parameters_lst)
 
         # Solver
-        solver = Solver(self.problem_size, problem_parameters, algorithm_parameters)
+        solver = Solver(self.problem_size, problem_parameters, algorithm_parameters, self.progress_with_frame)
         history = solver.genetic_algorithm()
-        best_solution = sorted(history, key=lambda sol: sol.fitness)[-1]
-        fitnesses = [solution.fitness for solution in history]
-        penalties = [solution.penalty for solution in history]
+        start_solution: Solution = history[0]
+        best_solution: Solution = sorted(history, key=lambda sol: sol.fitness)[-1]
+        fitnesses: List[float] = [solution.fitness for solution in history]
+        penalties_equality: List[float] = [solution.penalty_equality for solution in history]
+        penalties_inequality: List[float] = [solution.penalty_inequality for solution in history]
 
-        # Result
-        self.fitness_label_text.set(best_solution.fitness)
-        self.capacity_constraint_label_text.set(display(best_solution.X @ best_solution.d.T, c))
-        self.solution_label_text.set(best_solution)
+        # Results
+        for frame, fitness_frame, result in [(self.start_solution_frame, self.start_fitness_frame, start_solution),
+                                             (self.best_solution_frame, self.best_fitness_frame, best_solution)]:
+            tk.Label(frame, text="Shops", font=("Garamond", 12, "bold")).grid(row=0, column=1, columnspan=self.problem_size.N)
+            tk.Label(frame, text="Warehouses", font=("Garamond", 12, "bold")).grid(row=1, column=0, rowspan=self.problem_size.M)
+
+            for i in range(self.problem_size.M + 1):
+                for j in range(self.problem_size.N):
+                    font = ("Garamond", 10, "bold") if i == self.problem_size.M else ("Garamond", 10, "normal")
+                    cell = tk.Entry(frame, fg=TEXT_COLOR, bg="white", width=5, justify=tk.CENTER, font=font)
+                    value = round(result.X[:, j].sum(), 2) if i == self.problem_size.M else round(result[i, j], 2)
+                    cell.grid(row=i + 1, column=j + 1), cell.insert(0, value)
+                    cell["state"] = "disabled"
+
+            cell = tk.Entry(fitness_frame, fg=TEXT_COLOR, bg="white", width=25, justify=tk.CENTER, font=("Garamond", 14, "bold"))
+            cell.grid(row=0, column=1), cell.insert(0, round(result.fitness, 2))
+            cell["state"] = "disabled"
+
+        capacity_constraint: np.ndarray = np.concatenate((best_solution.X @ best_solution.d.T, c), axis=1)
+
+        for i in range(self.problem_size.M):
+            for j in range(3):
+                font = ("Garamond", 10, "bold") if j == 1 else ("Garamond", 10, "normal")
+                cell = tk.Entry(self.constraint_frame, fg=TEXT_COLOR, bg="white", width=15, justify=tk.CENTER, font=font)
+                value = round(capacity_constraint[i, 0], 2)\
+                    if j == 0 else ("<=" if j == 1 else round(capacity_constraint[i, 1], 2))
+                cell.grid(row=i, column=j), cell.insert(0, value)
+                cell["state"] = "disabled"
 
         # Best solutions' plots
         plot_tab = self.tabs[1]
@@ -643,44 +610,27 @@ class Application:
             widget.destroy()
 
         fig = plt.Figure(figsize=(10, 10), dpi=100)
-        ax1 = fig.add_subplot(2, 1, 1)
-        ax2 = fig.add_subplot(2, 1, 2)
+        ax1 = fig.add_subplot(2, 2, (1, 2))
+        ax2 = fig.add_subplot(2, 2, 3)
+        ax3 = fig.add_subplot(2, 2, 4)
         FigureCanvasTkAgg(fig, plot_tab).get_tk_widget().pack()
 
         ax1.set_title("Best solutions' objective function and penalty plots")
-        ax1.set_ylabel("Objective function value")
-        ax2.set_xlabel("Number of generation")
-        ax2.set_ylabel("Penalty value")
+        ax1.set_xlabel("Number of generation"), ax1.set_ylabel("Objective function value")
+        ax2.set_xlabel("Number of generation"), ax2.set_ylabel("Equality penalty value")
+        ax3.set_xlabel("Number of generation"), ax3.set_ylabel("Inequality penalty value")
 
-        for ax, values in zip((ax1, ax2), (fitnesses, penalties)):
+        for ax, values in zip((ax1, ax2, ax3), (fitnesses, penalties_equality, penalties_inequality)):
             factor = 0.1 if len(np.unique(values)) == 1 else 0
-            step = 100 if len(np.unique(values)) == 1 and penalties[0] == 0 else 0
-            ax.plot([i for i in range(N_GENERATIONS + 1)], [0] + values)
-            ax.axis([1, N_GENERATIONS, (1 - factor) * min(values) - step, (1 + factor) * max(values) + step])
+            step = 100 if len(np.unique(values)) == 1 and values[0] == 0 else 0
+            ax.plot([i for i in range(len(values) + 1)], [0.0] + values)
+            ax.axis([1, len(values), (1 - factor) * min(values) - step, (1 + factor) * max(values) + step])
             ax.grid()
 
         plt.show()
 
         # Show connections
         self.area.draw(warehouses=np.array([best_solution.X[i, :].sum() > 0 for i in range(self.problem_size.M)]))
-
-
-def display(space: np.ndarray, c: np.ndarray) -> str:
-    """
-    Function to display the capacity constraint
-    :param space: Spaced taken by the goods
-    :param c: Warehouses capacities, shape: Mx1
-    :return: String displaying if the constraint has been met
-    """
-
-    mat: List[str] = []
-
-    for i in range(len(c)):
-        row: List[str] = [str(round(space[i, 0], 2)), str(round(c[i, 0], 2))]
-        row_rep = row[0].ljust(10 - len(row[0])) + "<=".center(10) + row[1].ljust(10 - len(row[1]))
-        mat.append(row_rep)
-
-    return "\n".join(mat)
 
 
 # MAIN
