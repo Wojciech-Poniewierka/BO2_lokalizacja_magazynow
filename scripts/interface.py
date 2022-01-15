@@ -91,7 +91,7 @@ class Application:
                                                  "Mutation ratio", "Equality constraint penalty coefficient",
                                                  "Inequality constraint penalty coefficient"]
         algorithm_parameters_default_values: List[Number] = [POPULATION_SIZE, N_GENERATIONS, CROSSOVER_RATIO,
-                                                             1 / POPULATION_SIZE, EQUALITY_PENALTY, INEQUALITY_PENALTY]
+                                                             MUTATION_RATIO, EQUALITY_PENALTY, INEQUALITY_PENALTY]
 
         for i, (text, default_value) in enumerate(zip(algorithm_parameters_texts, algorithm_parameters_default_values)):
             tk.Label(frames[0], text=text).grid(row=i + 4, column=0)
@@ -514,7 +514,7 @@ class Application:
         b, d, V = self.mats[3].array, self.mats[4].array, self.mats[5].array
 
         # Algorithm parameters
-        default_values: List[Number] = [POPULATION_SIZE, N_GENERATIONS, CROSSOVER_RATIO, 1 / POPULATION_SIZE,
+        default_values: List[Number] = [POPULATION_SIZE, N_GENERATIONS, CROSSOVER_RATIO, MUTATION_RATIO,
                                         EQUALITY_PENALTY, INEQUALITY_PENALTY]
         warnings: List[str] = ["Population size should be a positive integer",
                                "Number of generations should be a positive integer",
@@ -567,12 +567,13 @@ class Application:
 
         # Solver
         solver = Solver(self.problem_size, problem_parameters, algorithm_parameters, self.progress_with_frame)
-        history = solver.genetic_algorithm()
-        start_solution: Solution = history[0]
-        best_solution: Solution = sorted(history, key=lambda sol: sol.fitness)[-1]
-        fitnesses: List[float] = [solution.fitness for solution in history]
-        penalties_equality: List[float] = [solution.penalty_equality for solution in history]
-        penalties_inequality: List[float] = [solution.penalty_inequality for solution in history]
+        best_solutions, best_feasible_solutions = solver.genetic_algorithm()
+        start_solution: Solution = best_feasible_solutions[0]
+        best_solution: Solution = sorted([solution for solution in best_feasible_solutions if solution is not None], key=lambda sol: sol.fitness)[-1]
+        best_fitnesses: List[float] = [solution.fitness for solution in best_solutions]
+        best_feasible_fitnesses: List[float] = [solution.fitness if solution is not None else 0 for solution in best_feasible_solutions]
+        penalties_equality: List[float] = [solution.penalty_equality for solution in best_solutions]
+        penalties_inequality: List[float] = [solution.penalty_inequality for solution in best_solutions]
 
         # Results
         for frame, fitness_frame, result in [(self.start_solution_frame, self.start_fitness_frame, start_solution),
@@ -615,17 +616,23 @@ class Application:
         ax3 = fig.add_subplot(2, 2, 4)
         FigureCanvasTkAgg(fig, plot_tab).get_tk_widget().pack()
 
+        factor = 0.1 if len(np.unique(best_fitnesses)) + len(np.unique(best_feasible_fitnesses)) == 2 else 0
+        step = 100 if len(np.unique(best_fitnesses)) + len(np.unique(best_feasible_fitnesses)) == 2 and best_fitnesses[0] == 0 and best_feasible_fitnesses[0] == 0 else 0
+        ax1.plot([i for i in range(len(best_fitnesses) + 1)], [0.0] + best_fitnesses, label="All")
+        ax1.plot([i for i in range(len(best_feasible_fitnesses) + 1)], [0.0] + best_feasible_fitnesses, label="Feasible")
+        ax1.axis([1, len(best_fitnesses), (1 - factor) * min(min(best_fitnesses), min(best_feasible_fitnesses)) - step, (1 + factor) * max(max(best_fitnesses), max(best_feasible_fitnesses)) + step])
+        ax1.grid()
         ax1.set_title("Best solutions' objective function and penalty plots")
         ax1.set_xlabel("Number of generation"), ax1.set_ylabel("Objective function value")
-        ax2.set_xlabel("Number of generation"), ax2.set_ylabel("Equality penalty value")
-        ax3.set_xlabel("Number of generation"), ax3.set_ylabel("Inequality penalty value")
+        ax1.legend()
 
-        for ax, values in zip((ax1, ax2, ax3), (fitnesses, penalties_equality, penalties_inequality)):
+        for ax, values, text in zip((ax2, ax3), (penalties_equality, penalties_inequality), ("Equality", "Inequality")):
             factor = 0.1 if len(np.unique(values)) == 1 else 0
             step = 100 if len(np.unique(values)) == 1 and values[0] == 0 else 0
             ax.plot([i for i in range(len(values) + 1)], [0.0] + values)
             ax.axis([1, len(values), (1 - factor) * min(values) - step, (1 + factor) * max(values) + step])
             ax.grid()
+            ax.set_xlabel("Number of generation"), ax.set_ylabel(f"{text} penalty value")
 
         plt.show()
 

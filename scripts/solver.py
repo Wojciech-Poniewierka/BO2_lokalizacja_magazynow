@@ -7,7 +7,7 @@ import pandas as pd
 import tkinter as tk
 import tkinter.ttk as ttk
 
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 
 # PROJECT MODULES
 from data import ProblemSize, ProblemParameters, AlgorithmParameters
@@ -62,6 +62,10 @@ class Solver:
         if algorithm_parameters.methods[0] == 0:
             self.population = [Solution(problem_size, problem_parameters, algorithm_parameters)
                                for _ in range(self.population_size)]
+            # self.population = [Solution(problem_size, problem_parameters, algorithm_parameters)
+            #                    for _ in range(self.population_size // 2)]
+            # self.population += [Solution(problem_size, problem_parameters, algorithm_parameters, feas=False)
+            #                    for _ in range(self.population_size - self.population_size // 2)]
 
         # Best or worst
         else:
@@ -74,54 +78,26 @@ class Solver:
 
         self.sorted_population = self.population
 
-    def roulette_wheel(self) -> Solution:
+    def spin(self) -> Tuple[Solution, Solution]:
         """
-        Method to select a solution with the roulette wheel method
-        :return: Selected solution
+        Method to select the parents with one of those methods: roulette wheel, linear rank, non-linear rank
+        :return: Selected parents
         """
 
-        # Create the roulette wheel
-        population_fitness = [solution.fitness for solution in self.population]
-        fitness_sum = sum(population_fitness)
+        # Create the wheel
         wheel = np.zeros(self.population_size + 1)
 
-        for i in range(1, self.population_size + 1):
-            wheel[i] = population_fitness[i - 1] / fitness_sum + wheel[i - 1]
-
-        # Draw a random solution
-        r = np.random.uniform()
-
-        for i in range(self.population_size):
-            if wheel[i] < r < wheel[i + 1]:
-                return self.population[i]
-
-        return self.population[0]
-
-    def tournament(self) -> Solution:
-        """
-        Method to select a solution with the tournament method
-        :return: Selected solution
-        """
-
-        solutions = [self.population[np.random.randint(self.population_size)] for _ in range(self.selection_method_value)]
-
-        return sorted(solutions, key=lambda sol: sol.fitness)[-1]
-
-    def rank(self) -> Solution:
-        """
-        Method to select a solution with the rank method
-        :return: Selected solution
-        """
-
-        # Create the roulette wheel
-        wheel = np.zeros(self.population_size + 1)
+        # Roulette wheel
+        if self.selection_method == 0:
+            for i in range(1, self.population_size + 1):
+                wheel[i] = self.sorted_population[i - 1].fitness + wheel[i - 1]
 
         # Linear
         if self.selection_method == 3:
             eta = self.selection_method_value
 
             for i in range(1, self.population_size + 1):
-                wheel[i] = eta + 2 * (1 - eta) * (i - 1) / (self.population_size - 1) + wheel[i - 1]
+                wheel[i] = eta * (self.population_size - 1) + 2 * (1 - eta) * (i - 1) + wheel[i - 1]
 
         else:
             q = self.selection_method_value
@@ -129,14 +105,26 @@ class Solver:
             for i in range(1, self.population_size + 1):
                 wheel[i] = q * (1 - q)**(i - 1) + wheel[i - 1]
 
-        # Draw a random solution
-        r = np.random.uniform(low=0, high=wheel.sum())
+        # Draw 2 different random solutions
+        parents: List[Solution, Solution] = [self.sorted_population[0], self.sorted_population[0]]
+        idx: List[int, int] = [0, 0]
 
-        for i in range(self.population_size):
-            if wheel[i] < r < wheel[i + 1]:
-                return self.sorted_population[i]
+        for i in range(2):
+            r = np.random.uniform(low=0, high=wheel[-1])
 
-        return self.population[0]
+            for j in range(self.population_size):
+                if wheel[j] < r < wheel[j + 1]:
+                    parents[i], idx[i] = self.sorted_population[j], j
+                    break
+
+        if idx[0] != idx[1]:
+            return parents[0], parents[1]
+
+        elif sum(idx) == 0:
+            return self.sorted_population[0], self.sorted_population[1]
+
+        else:
+            return self.sorted_population[idx[0] - 1], self.sorted_population[idx[0]]
 
     def select(self) -> Tuple[Solution, Solution]:
         """
@@ -144,16 +132,9 @@ class Solver:
         :return: Parents
         """
 
-        # Roulette wheel
-        if self.selection_method == 0:
-            parent1 = self.roulette_wheel()
-            parent2 = self.roulette_wheel()
-
-            while parent1 == parent2:
-                parent1 = self.roulette_wheel()
-                parent2 = self.roulette_wheel()
-
-            return parent1, parent2
+        # Roulette wheel, linear rank or non-linear rank
+        if self.selection_method in (0, 3, 4):
+            return self.spin()
 
         # Sorting grouping strategy
         elif self.selection_method == 1:
@@ -166,25 +147,22 @@ class Solver:
 
         # Tournament
         elif self.selection_method == 2:
-            parent1 = self.tournament()
-            parent2 = self.tournament()
+            parents: List[Solution] = []
 
-            while parent1 == parent2:
-                parent1 = self.tournament()
-                parent2 = self.tournament()
+            for _ in range(2):
+                participants: List[Solution] = []
+                idx: List[int] = []
 
-            return parent1, parent2
+                while len(participants) < self.selection_method_value:
+                    i = np.random.randint(self.population_size)
 
-        # Rank
-        else:
-            parent1 = self.rank()
-            parent2 = self.rank()
+                    if i not in idx:
+                        participants.append(self.sorted_population[i])
+                        idx.append(i)
 
-            # while parent1 == parent2:
-            #     parent1 = self.rank()
-            #     parent2 = self.rank()
+                parents.append(sorted(participants, key=lambda p: p.fitness, reverse=True)[0])
 
-            return parent1, parent2
+            return parents[0], parents[1]
 
     def crossover(self) -> Tuple[Solution, Solution]:
         """
@@ -210,11 +188,11 @@ class Solver:
             mat1 = np.zeros((self.problem_size.M, self.problem_size.N))
             mat2 = np.zeros((self.problem_size.M, self.problem_size.N))
 
-            r = np.random.randint(self.problem_size.M)
-            mat1[:r, :] = parent1.X[:r, :]
-            mat1[r:, ] = parent2.X[r:, :]
-            mat2[:r, :] = parent2.X[:r, :]
-            mat2[r:, :] = parent1.X[r:, :]
+            r = np.random.randint(self.problem_size.N)
+            mat1[:, :r] = parent1.X[:, :r]
+            mat1[:, r:] = parent2.X[:, r:]
+            mat2[:, :r] = parent2.X[:, :r]
+            mat2[:, r:] = parent1.X[:, r:]
 
             offspring1 = Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=mat1)
             offspring2 = Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=mat2)
@@ -255,19 +233,20 @@ class Solver:
             offspring2 = (parent1.mul(1 - beta) + parent2.mul(1 + beta)).mul(0.5)
 
         # Check the constraints
-        if offspring1.is_feasible() and offspring2.is_feasible():
+        if offspring1.is_correct() and offspring2.is_correct():
             return offspring1, offspring2
 
         else:
             return parent1, parent2
 
-    def genetic_algorithm(self) -> List[Solution]:
+    def genetic_algorithm(self) -> Tuple[List[Solution], List[Optional[Solution]]]:
         """
         Method to perform the genetic algorithm
-        :return: Best solutions throughout the history
+        :return: Best solutions and best feasible solutions throughout the history
         """
 
-        history: List[Solution] = []
+        best_solutions: List[Solution] = []
+        best_feasible_solutions: List[Optional[Solution]] = []
         progress_ticks: int = 10
 
         for n_generation in range(self.n_generations):
@@ -278,11 +257,15 @@ class Solver:
 
             new_generation: List[Solution] = []
             self.sorted_population = sorted(self.population, key=lambda sol: sol.fitness, reverse=True)
+            best_solutions.append(self.sorted_population[0])
 
-            if n_generation == 0:
-                print(self.sorted_population[0].X)
+            for solution in self.sorted_population:
+                if solution.is_feasible():
+                    best_feasible_solutions.append(solution)
+                    break
 
-            history.append(self.sorted_population[0])
+            else:
+                best_feasible_solutions.append(None)
 
             for _ in range(0, self.population_size, 2):
 
@@ -290,12 +273,18 @@ class Solver:
                 offspring1, offspring2 = self.crossover()
 
                 # Mutation
-                offspring1.mutate(n_generation), offspring2.mutate(n_generation)
-                new_generation.append(offspring1), new_generation.append(offspring2)
+                new_generation.append(offspring1.mutate(n_generation))
+                new_generation.append(offspring2.mutate(n_generation))
 
-            self.population = sorted(self.population + new_generation, key=lambda sol: sol.fitness, reverse=True)[:self.population_size]
+            self.population = new_generation
+            print(sum([(np.abs(solution.X.sum(axis=0) - 1) < 0.01 * np.ones((1, self.problem_size.N))).all()
+                       for solution in self.population]), end="\t")
 
-        return history
+            # self.population = sorted(self.population + new_generation, key=lambda sol: sol.fitness, reverse=True)[:self.population_size]
+
+        print()
+
+        return best_solutions, best_feasible_solutions
 
     def save_problem_parameters(self) -> None:
         """

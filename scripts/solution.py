@@ -5,6 +5,8 @@
 import numpy as np
 
 from typing import Tuple, Optional, Union, List
+from copy import deepcopy
+from random import shuffle
 
 # PROJECT MODULES
 from data import ProblemSize, ProblemParameters, AlgorithmParameters
@@ -17,7 +19,7 @@ class Solution:
     """
 
     def __init__(self, problem_size: ProblemSize, problem_parameters: ProblemParameters,
-                 algorithm_parameters: AlgorithmParameters, mat: Optional[np.ndarray] = None) -> None:
+                 algorithm_parameters: AlgorithmParameters, mat: Optional[np.ndarray] = None, feas=True) -> None:
         """
         Constructor
         :param problem_size: Problem size
@@ -36,12 +38,8 @@ class Solution:
 
         # Problem parameters
         self.problem_parameters = problem_parameters
-        self.f = problem_parameters.f
-        self.S = problem_parameters.S
-        self.c = problem_parameters.c
-        self.b = problem_parameters.b
-        self.d = problem_parameters.d
-        self.V = problem_parameters.V
+        self.f, self.S, self.c = problem_parameters.f, problem_parameters.S, problem_parameters.c
+        self.b, self.d, self.V = problem_parameters.b, problem_parameters.d, problem_parameters.V
 
         # Algorithm parameters
         self.algorithm_parameters = algorithm_parameters
@@ -58,30 +56,36 @@ class Solution:
         # Decision variables matrix
         if mat is None:
             while True:
-                self.X = np.random.uniform(size=(self.M, self.N))
+                if feas:
+                    self.X = np.random.uniform(size=(self.M, self.N))
 
-                for j in range(self.N):
-                    col_sum = self.X[:, j].sum()
-                    self.X[:, j] /= col_sum
+                    for j in range(self.N):
+                        col_sum = self.X[:, j].sum()
+                        self.X[:, j] /= col_sum
+
+                else:
+                    self.X = np.random.uniform(low=0, high=2 / self.N, size=(self.M, self.N))
 
                 if (self.X @ self.d.T <= self.c).all():
                     break
 
-            # self.X = np.zeros((self.M, self.N))
-            # indexes_to_omit: List[Tuple[int, int]] = [(np.random.randint(self.M), j) for j in range(self.N)]
+            # if feas:
+            #     while True:
+            #         self.X = np.zeros((self.M, self.N))
             #
-            # while True:
-            #     indexes_to_draw = [(i, j) for j in range(self.N) for i in range(self.M) if (i, j) not in indexes_to_omit]
+            #         for j in range(self.N):
+            #             idx_to_omit = np.random.randint(self.M)
+            #             indexes: List[int] = [i for i in range(self.M) if i != idx_to_omit]
+            #             shuffle(indexes)
             #
-            #     while indexes_to_draw:
-            #         i, j = indexes_to_draw.pop(np.random.randint(len(indexes_to_draw)))
-            #         self.X[i, j] = np.random.uniform(low=0, high=1 - self.X[:, j].sum())
+            #             while indexes:
+            #                 i = indexes.pop()
+            #                 self.X[i, j] = np.random.uniform(low=0, high=1 - self.X[:, j].sum())
             #
-            #     for i, j in indexes_to_omit:
-            #         self.X[i, j] = 1 - self.X[:, j].sum()
+            #             self.X[idx_to_omit, j] = 1 - self.X[:, j].sum()
             #
-            #     if (self.X @ self.d.T <= self.c).all():
-            #         break
+            #         if (self.X @ self.d.T <= self.c).all():
+            #             break
 
         else:
             self.X = mat
@@ -163,16 +167,16 @@ class Solution:
         Method to calculate the objective function and the penalty values
         """
 
-        income = (self.V * self.X @ self.d.T).sum()
+        income = ((self.V * self.X) @ self.d.T).sum()
         are_located = (self.X.sum(axis=1) > 0).astype(int)
         cost = (are_located * (self.b + self.f + (np.ceil(self.X) * self.S).sum(axis=1).reshape(self.M, 1))).sum()
-        equality_constraint_diff = self.X.sum(axis=0) - 1
-        inequality_constraint_diff = np.maximum(np.zeros((self.M, self.N)), self.X @ self.d.T - self.c)
-        self.penalty_equality = self.equality_penalty_coefficient**3 * abs(equality_constraint_diff.sum())
-        self.penalty_inequality = self.inequality_penalty_coefficient**3 * abs(inequality_constraint_diff.sum())
+        equality_constraint_diff = np.abs(self.X.sum(axis=0) - 1)
+        inequality_constraint_diff = np.maximum(np.zeros((self.M, 1)), self.X @ self.d.T - self.c)
+        self.penalty_equality = self.equality_penalty_coefficient * equality_constraint_diff.sum()**2
+        self.penalty_inequality = self.inequality_penalty_coefficient * inequality_constraint_diff.sum()**2
         self.fitness = income - cost - self.penalty_equality - self.penalty_inequality
 
-    def is_feasible(self) -> bool:
+    def is_correct(self) -> bool:
         """
         Method to check if the solution is feasible
         :return: Flag informing if the solution is feasible
@@ -180,67 +184,74 @@ class Solution:
 
         return ((0 <= self.X) & (self.X <= 1)).all()
 
-    def mutate(self, n_generation: int) -> None:
+    def is_feasible(self) -> bool:
+        """
+        Method to check if the solution is feasible
+        :return: Flag informing if the solution is feasible
+        """
+
+        return self.is_correct() and (self.X @ self.d.T <= self.c).all() and (np.abs(self.X.sum(axis=0) - 1) < 0.01 * np.ones((1, self.problem_size.N))).all()
+
+    def mutate(self, n_generation: int) -> "Solution":
         """
         Method to mutate the solution
         :param n_generation: Current generation number
+        :return: Mutated solution
         """
 
         # Swap
         if self.mutation_method == 0:
-            if np.random.uniform() < self.mutation_ratio:
-                mat = self.X
-                n_indexes = np.random.randint(self.M)
-                indexes = list(np.random.choice(self.M, size=n_indexes, replace=False))
+            mat = deepcopy(self.X)
 
-                while len(indexes) > 1:
-                    row1_idx = indexes.pop()
-                    n_idx = np.random.randint(len(indexes))
-                    row2_idx = indexes.pop(n_idx)
+            while True:
+                if np.random.uniform() >= self.mutation_ratio:
+                    break
 
-                    mat[row1_idx, :] = self.X[row2_idx, :]
-                    mat[row2_idx, :] = self.X[row1_idx, :]
+                idx = np.random.choice(self.N, size=2, replace=False)
+                col1_idx = idx[0]
+                col2_idx = idx[1]
+                mat[:, [col1_idx, col2_idx]] = mat[:, [col2_idx, col1_idx]]
 
-                self.X = mat
+            return Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=mat)
 
         # Borrow
         elif self.mutation_method == 1:
-            if np.random.uniform() < self.mutation_ratio:
-                mat = self.X
-                n_indexes = np.random.randint(self.M)
-                indexes = list(np.random.choice(self.M, size=n_indexes, replace=False))
+            mat = deepcopy(self.X)
 
-                while len(indexes) > 1:
-                    row1_idx = indexes.pop()
-                    n_idx = np.random.randint(len(indexes))
-                    row2_idx = indexes.pop(n_idx)
-                    value = np.random.uniform(high=min(min(self.X[row2_idx, :]), 1 - max(self.X[row1_idx, :])))
+            while np.random.uniform() < self.mutation_ratio:
+                idx = np.random.choice(self.M, size=2, replace=False)
+                row1_idx = idx[0]
+                row2_idx = idx[1]
+                dx = np.random.uniform(low=0, high=min(min(self.X[row2_idx, :]), 1 - max(self.X[row1_idx, :])))
+                mat[row1_idx, :] = self.X[row1_idx, :] + dx
+                mat[row2_idx, :] = self.X[row2_idx, :] - dx
 
-                    mat[row1_idx, :] = self.X[row1_idx, :] + value
-                    mat[row2_idx, :] = self.X[row2_idx, :] - value
+            return Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=mat)
 
-                self.X = mat
-
-        # Non-uniform
+        # # Non-uniform
         elif self.mutation_method == 2:
             b = self.mutation_method_value
+            mat = deepcopy(self.X)
 
             for i in range(self.M):
                 for j in range(self.N):
                     if np.random.uniform() < self.mutation_ratio:
                         if np.random.uniform() < 0.5:
-                            alpha = 1 - self.X[i, j]
+                            alpha = 1 - mat[i, j]
 
                         else:
-                            alpha = -self.X[i, j]
+                            alpha = -mat[i, j]
 
                         beta = np.random.uniform()
 
-                        self.X[i, j] = self.X[i, j] + alpha * (1 - beta**(1 - n_generation / self.n_generations)**b)
+                        mat[i, j] = mat[i, j] + alpha * (1 - beta**(1 - n_generation / self.n_generations)**b)
+
+            return Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=mat)
 
         # Polynomial
         if self.mutation_method == 3:
             eta = self.mutation_method_value
+            mat = deepcopy(self.X)
 
             for i in range(self.M):
                 for j in range(self.N):
@@ -248,9 +259,9 @@ class Solution:
                         u = np.random.uniform()
 
                         if u <= 0.5:
-                            self.X[i, j] = self.X[i, j] + (2 * u)**(1 / (1 + eta)) - 1
+                            mat[i, j] = mat[i, j] + (2 * u)**(1 / (1 + eta)) - 1
 
                         else:
-                            self.X[i, j] = self.X[i, j] + (1 - (2 - 2 * u)**(1 / (1 + eta))) * (1 - self.X[i, j])
+                            mat[i, j] = mat[i, j] + (1 - (2 - 2 * u)**(1 / (1 + eta))) * (1 - mat[i, j])
 
-            self.calculate()
+            return Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=mat)

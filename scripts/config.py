@@ -28,16 +28,17 @@ COST_MIN = 10                               # Minimal cost
 COST_MAX = 20                               # Maximal cost
 
 POPULATION_SIZE = 50                        # Population size
-N_GENERATIONS = 50                          # Number of generations
-CROSSOVER_RATIO = 0.85                      # Crossover ratio
-EQUALITY_PENALTY = 1000000                  # Equality constraint penalty coefficient
-INEQUALITY_PENALTY = 1000000                # Inequality constraint penalty coefficient
+N_GENERATIONS = 200                         # Number of generations
+CROSSOVER_RATIO = 0.9                       # Crossover ratio
+MUTATION_RATIO = 0.1                        # Mutation ratio
+EQUALITY_PENALTY = 1000                     # Equality constraint penalty coefficient
+INEQUALITY_PENALTY = 0                      # Inequality constraint penalty coefficient
 
 START_SOLUTION = 20                         # Start solution method range
 
 SELECTION_SORTING_GROUPING_STRATEGY = 6     # Sorting grouping strategy selection offset
-SELECTION_TOURNAMENT = 4                    # Tournament selection participants
-SELECTION_LINEAR_RANK = 1.5                 # Linear rank selection coefficient
+SELECTION_TOURNAMENT = 10                   # Tournament selection participants
+SELECTION_LINEAR_RANK = 1.9                 # Linear rank selection coefficient
 SELECTION_NON_LINEAR_RANK = 0.5             # Non-linear rank selection coefficient
 
 CROSSOVER_LINEAR = 0.5                      # Linear crossover coefficient
