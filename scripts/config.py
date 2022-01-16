@@ -34,15 +34,14 @@ MUTATION_RATIO = 0.1                        # Mutation ratio
 EQUALITY_PENALTY = 1000                     # Equality constraint penalty coefficient
 INEQUALITY_PENALTY = 0                      # Inequality constraint penalty coefficient
 
-START_SOLUTION = 20                         # Start solution method range
+S_SORTING_GROUPING_STRATEGY = 6             # Sorting grouping strategy selection offset
+S_TOURNAMENT = 10                           # Tournament selection participants
+S_LINEAR_RANK = 1.9                         # Linear rank selection coefficient
+S_NON_LINEAR_RANK = 0.5                     # Non-linear rank selection coefficient
 
-SELECTION_SORTING_GROUPING_STRATEGY = 6     # Sorting grouping strategy selection offset
-SELECTION_TOURNAMENT = 10                   # Tournament selection participants
-SELECTION_LINEAR_RANK = 1.9                 # Linear rank selection coefficient
-SELECTION_NON_LINEAR_RANK = 0.5             # Non-linear rank selection coefficient
+C_LINEAR = 0.5                              # Linear crossover coefficient
+C_BLEND = 0.2                               # Blend crossover coefficient
+C_SIMULATED_BINARY = 7                      # Simulated binary crossover coefficient
 
-CROSSOVER_LINEAR = 0.5                      # Linear crossover coefficient
-CROSSOVER_BLEND = 0.2                       # Blend crossover coefficient
-CROSSOVER_SIMULATED_BINARY = 7              # Simulated binary crossover coefficient
-
-MUTATION_POLYNOMIAL = 100                   # Polynomial mutation coefficient
+M_NON_UNIFORM = 30                          # Non-uniform mutation coefficient
+M_POLYNOMIAL = 60                           # Polynomial mutation coefficient

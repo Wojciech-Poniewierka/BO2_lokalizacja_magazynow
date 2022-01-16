@@ -62,14 +62,14 @@ class Application:
 
         self.notebook.add(main_tab, text="Main")
         self.notebook.add(plot_tab, text="Plot")
-        self.notebook.add(generator_tab, text="Problem parameters generator")
+        self.notebook.add(generator_tab, text="Generator")
         self.tabs = [main_tab, plot_tab, generator_tab]
         #--------------------------------------------------------------------------------------------------------------#
         # Buttons
-        self.dim_button = tk.Button(frames[0], text="Choose problem size", command=self.determine_size)
+        self.dim_button = tk.Button(frames[0], text="Set size", command=self.determine_size)
         self.dim_button.grid(row=0, column=0, ipadx=10, ipady=10)
 
-        self.run_button = tk.Button(frames[0], text="Run algorithm", command=self.run, state="disabled")
+        self.run_button = tk.Button(frames[0], text="Run", command=self.run, state="disabled")
         self.run_button.grid(row=0, column=1, ipadx=10, ipady=10)
 
         progress = ttk.Progressbar(frames[0], orient=tk.HORIZONTAL, mode="determinate")
@@ -77,7 +77,7 @@ class Application:
         self.progress_with_frame: Tuple[ttk.Progressbar, tk.Frame] = (progress, frames[0])
 
         # Problem size
-        tk.Label(frames[0], text="Problem size", font=BOLD_FONT).grid(row=1, column=0, columnspan=2)
+        tk.Label(frames[0], text="Size", font=BOLD_FONT).grid(row=1, column=0, columnspan=2)
         self.size_entries: List[tk.Entry] = [tk.Entry(frames[0]), tk.Entry(frames[0])]
 
         for i, dimension in enumerate(PROBLEM_SIZE):
@@ -85,7 +85,7 @@ class Application:
             self.size_entries[i].insert(0, dimension)
 
         # Algorithm parameters
-        tk.Label(frames[0], text="Algorithm parameters", font=BOLD_FONT).grid(row=3, column=0, columnspan=2)
+        tk.Label(frames[0], text="Parameters", font=BOLD_FONT).grid(row=3, column=0, columnspan=2)
         self.algorithm_parameters_entries: List[tk.Entry] = []
         algorithm_parameters_texts: List[str] = ["Population size", "Number of generations", "Crossover ratio",
                                                  "Mutation ratio", "Equality constraint penalty coefficient",
@@ -117,13 +117,12 @@ class Application:
             methods_frames[i].grid(row=i // 2, column=i % 2, sticky="NW", pady=(0, 10))
             tk.Label(methods_frames[i], text=text, font=BOLD_FONT).grid(row=0, column=0, columnspan=2)
 
-        methods_info: List[List[Tuple[str, Optional[Number]]]] = [[("Random", None), ("Best", START_SOLUTION),
-            ("Worst", START_SOLUTION)], [("Roulette wheel", None),
-            ("Sorting grouping strategy", SELECTION_SORTING_GROUPING_STRATEGY), ("Tournament", SELECTION_TOURNAMENT),
-            ("Linear rank", SELECTION_LINEAR_RANK), ("Non-linear rank", SELECTION_NON_LINEAR_RANK)], [("Uniform", None),
-            ("Point", None), ("Linear", CROSSOVER_LINEAR), ("Blend", CROSSOVER_BLEND),
-            ("Simulated binary", CROSSOVER_SIMULATED_BINARY)], [("Swap", None), ("Borrow", None),
-            ("Non-uniform", PROBLEM_SIZE[0] * PROBLEM_SIZE[1]), ("Polynomial", MUTATION_POLYNOMIAL)]]
+        methods_info: List[List[Tuple[str, Optional[Number]]]] = [[("Scaling", None), ("Filling", None)],
+            [("Roulette wheel", None), ("Sorting grouping strategy", S_SORTING_GROUPING_STRATEGY),
+             ("Tournament", S_TOURNAMENT), ("Linear rank", S_LINEAR_RANK), ("Non-linear rank", S_NON_LINEAR_RANK)],
+            [("Uniform", None), ("Point", None), ("Linear", C_LINEAR), ("Blend", C_BLEND),
+             ("Simulated binary", C_SIMULATED_BINARY)], [("Swap", None), ("Borrow", None),
+            ("Non-uniform", M_NON_UNIFORM), ("Polynomial", M_POLYNOMIAL)]]
         self.methods_entries: List[List[tk.Entry]] = [[] for _ in range(4)]
 
         for i, method_info in enumerate(methods_info):
@@ -138,6 +137,11 @@ class Application:
                     self.methods_entries[i][-1].grid(row=j + 1, column=1, sticky=tk.W)
                     self.methods_entries[i][-1].insert(0, value)
                     self.methods_entries[i][-1]["state"] = "disabled"
+
+        # Checkbox
+        self.start_checkbox_value = tk.IntVar()
+        tk.Checkbutton(methods_frames[0], text="Allow infeasible solutions",
+                       variable=self.start_checkbox_value).grid(row=3, column=0, sticky=tk.W)
         #--------------------------------------------------------------------------------------------------------------#
         # Result label
         tk.Label(frames[2], text="Start solution", font=BOLD_FONT).grid(row=0, column=0)
@@ -238,10 +242,8 @@ class Application:
         self.generator_warning_label_text.set("")
 
         if idx == 0:
-            transport_cost_amplifier = self.get(self.problem_parameters_entries[0],
-                                                replacement=TRANSPORT_COST_AMPLIFIER,
-                                                warning="Transport cost amplifier should be a positive float",
-                                                tab="generator")
+            transport_cost_amplifier = self.get(self.problem_parameters_entries[0], tab="generator",
+                                                warning="Transport cost amplifier: positive float")
 
             if transport_cost_amplifier is None:
                 return None
@@ -251,10 +253,10 @@ class Application:
             self.mats[1].set_array(S)
 
         elif idx == 1:
-            capacity_min = self.get(self.problem_parameters_entries[1], replacement=CAPACITY_MIN,
-                                    warning="Minimal capacity should be a non-negative float", tab="generator")
-            capacity_max = self.get(self.problem_parameters_entries[2], replacement=CAPACITY_MAX,
-                                    warning="Maximal capacity should be a positive float", tab="generator")
+            capacity_min = self.get(self.problem_parameters_entries[1], tab="generator",
+                                    warning="Minimal capacity: non-negative float")
+            capacity_max = self.get(self.problem_parameters_entries[2], tab="generator",
+                                    warning="Maximal capacity: positive float")
 
             if capacity_min is None or capacity_max is None:
                 return None
@@ -267,10 +269,8 @@ class Application:
                 self.mats[3].set_array(b)
 
         elif idx == 3:
-            self.building_cost_amplifier = self.get(self.problem_parameters_entries[3],
-                                                    replacement=BUILDING_COST_AMPLIFIER,
-                                                    warning="Building cost amplifier should be a positive float",
-                                                    tab="generator")
+            self.building_cost_amplifier = self.get(self.problem_parameters_entries[3], tab="generator",
+                                                    warning="Building cost amplifier: positive float")
 
             if self.building_cost_amplifier is None:
                 return None
@@ -284,10 +284,10 @@ class Application:
             self.mats[3].set_array(b)
 
         elif idx == 4:
-            demand_min = self.get(self.problem_parameters_entries[4], replacement=DEMAND_MIN,
-                                  warning="Minimal demand should be a non-negative float", tab="generator")
-            demand_max = self.get(self.problem_parameters_entries[5], replacement=DEMAND_MAX,
-                                  warning="Maximal demand should be a positive float", tab="generator")
+            demand_min = self.get(self.problem_parameters_entries[4], tab="generator",
+                                  warning="Minimal demand: non-negative float")
+            demand_max = self.get(self.problem_parameters_entries[5], tab="generator",
+                                  warning="Maximal demand: positive float")
 
             if demand_min is None or demand_max is None:
                 return None
@@ -296,10 +296,10 @@ class Application:
             self.mats[4].set_array(d)
 
         elif idx == 6:
-            cost_min = self.get(self.problem_parameters_entries[6], replacement=COST_MIN,
-                                warning="Minimal cost should be a non-negative float", tab="generator")
-            cost_max = self.get(self.problem_parameters_entries[7], replacement=COST_MAX,
-                                warning="Maximal cost should be a positive float", tab="generator")
+            cost_min = self.get(self.problem_parameters_entries[6], tab="generator",
+                                warning="Minimal cost: non-negative float")
+            cost_max = self.get(self.problem_parameters_entries[7], tab="generator",
+                                warning="Maximal cos: positive float")
 
             if cost_min is None or cost_max is None:
                 return None
@@ -316,7 +316,7 @@ class Application:
         S = pd.read_csv(f"instances/S_{n_instance}.csv").to_numpy()
         M, N = S.shape
         self.problem_size = ProblemSize(M, N)
-        self.dim_button["text"] = "Change problem size"
+        self.dim_button["text"] = "Resize"
         self.run_button["state"] = "normal"
         self.mats: List[Matrix] = []
         self.update(n_instance=n_instance)
@@ -373,38 +373,27 @@ class Application:
         self.load_combobox["values"] = combobox_values
         self.remove_combobox["values"] = combobox_values
 
-    def get(self, entry: tk.Entry, is_int: bool = False, replacement: Number = 0, warning: str = "", tab: str = "main",
+    def get(self, entry: tk.Entry, is_int: bool = False, warning: str = "", tab: str = "main",
             value_range: Optional[Tuple[Number, Number]] = None) -> Optional[Number]:
         """
         Method to convert the entry content to a number if it is possible, otherwise to inform that it is not possible
         :param entry: Entry
         :param is_int: Flag information if the entry value should be an integer
-        :param replacement: Replacement value in case the entry content is an empty string
-        :param warning: Warning information in case the entry content is neither an empty string, nor the actual number
-        string representation
+        :param warning: Warning information in case the entry content is not a number string representation
         :param tab: Notebook tab in which to set up the warning
         :param value_range: Desired value range
-        :return: The entry content is an empty string -> The blank replacement float or integer value,
-        The entry content is actually a number -> The entry content as a float or an integer,
-        The entry content is neither an empty string, nor the actual number string representation -> None
+        :return: The entry content is a number string representation -> The entry content as a float or an integer,
+        Otherwise -> None
         """
 
-        if tab == "main":
-            label_text = self.main_warning_label_text
-
-        elif tab == "generator":
-            label_text = self.generator_warning_label_text
-
-        else:
-            label_text = self.size_warning_label_text
+        d = {"main": self.main_warning_label_text, "generator": self.generator_warning_label_text,
+             "size": self.size_warning_label_text}
+        label_text = d[tab]
 
         value = entry.get()
         warning = f"{label_text.get()}\n{warning}" if label_text.get() != "" else warning
 
-        if value == "":
-            return replacement
-
-        if value.count(".") > 1:
+        if value == "" or value.count(".") > 1:
             label_text.set(warning)
 
             return None
@@ -432,13 +421,8 @@ class Application:
 
         self.size_warning_label_text.set("")
 
-        M_replacement = PROBLEM_SIZE[0] if self.problem_size is None else self.problem_size.M
-        N_replacement = PROBLEM_SIZE[1] if self.problem_size is None else self.problem_size.N
-
-        M = self.get(self.size_entries[0], is_int=True, replacement=M_replacement,
-                     warning="Number of rows should be a positive integer", tab="size")
-        N = self.get(self.size_entries[1], is_int=True, replacement=N_replacement,
-                     warning="Number of columns should be a positive integer", tab="size")
+        M = self.get(self.size_entries[0], is_int=True, warning="Number of rows: positive integer", tab="size")
+        N = self.get(self.size_entries[1], is_int=True, warning="Number of columns: positive integer", tab="size")
 
         if M is None or N is None:
             return None
@@ -514,50 +498,38 @@ class Application:
         b, d, V = self.mats[3].array, self.mats[4].array, self.mats[5].array
 
         # Algorithm parameters
-        default_values: List[Number] = [POPULATION_SIZE, N_GENERATIONS, CROSSOVER_RATIO, MUTATION_RATIO,
-                                        EQUALITY_PENALTY, INEQUALITY_PENALTY]
-        warnings: List[str] = ["Population size should be a positive integer",
-                               "Number of generations should be a positive integer",
-                               "Crossover ratio should be a float from interval [0, 1]",
-                               "Mutation ratio should be a float from interval [0, 1]",
-                               "Equality constraint penalty coefficient should be a non-negative float",
-                               "Inequality constraint penalty coefficient should be a non-negative float"]
+        warnings: List[str] = ["Population size: positive integer", "Number of generations: positive integer",
+                               "Crossover ratio: float from interval [0, 1]",
+                               "Mutation ratio: float from interval [0, 1]",
+                               "Equality constraint penalty coefficient: non-negative float",
+                               "Inequality constraint penalty coefficient: non-negative float"]
         algorithm_parameters_lst: List[float] = [self.get(self.algorithm_parameters_entries[i], is_int=i < 2,
-                                    replacement=default_value, warning=warning,
-                                    value_range=(0, 1) if i in (2, 3) else None)
-                                    for i, (default_value, warning) in enumerate(zip(default_values, warnings))]
+                                                          warning=warning, value_range=(0, 1) if i in (2, 3) else None)
+                                                 for i, warning in enumerate(warnings)]
 
         methods: List[int] = [int(self.methods[i].get()) for i in range(4)]
         methods_values: List[Optional[Number]] = [-1 for _ in range(4)]
 
-        if methods[0] > 0:
-            warnings: List[str] = ["Best", "Start"]
-            methods_values[0] = self.get(self.methods_entries[0][methods[0] - 1], is_int=True, replacement=START_SOLUTION,
-                                         warning=f"{warnings[methods[0] - 1]} start solution range should be a positive integer")
+        methods_values[0] = self.start_checkbox_value.get()
 
         if methods[1] > 0:
-            replacements: List[Number] = [SELECTION_SORTING_GROUPING_STRATEGY, SELECTION_TOURNAMENT, SELECTION_LINEAR_RANK,
-                                          SELECTION_NON_LINEAR_RANK]
-            warnings: List[str] = ["Sorting grouping strategy selection offset should be a non-negative integer",
-                                   "Tournament selection participants number should be a positive integer",
-                                   "Linear rank selection coefficient should be a float from interval (1, 2)",
-                                   "Non-linear rank selection coefficient should be a float from interval (0, 1)"]
+            warnings: List[str] = ["Sorting grouping strategy selection offset: non-negative integer",
+                                   "Tournament selection participants number: positive integer",
+                                   "Linear rank selection coefficient: float from interval (1, 2)",
+                                   "Non-linear rank selection coefficient: float from interval (0, 1)"]
             value_ranges: List[Optional[Tuple[int, int]]] = [None, None, (1, 2), (0, 1)]
             methods_values[1] = self.get(self.methods_entries[1][methods[1] - 1], is_int=methods[1] < 3,
-                                         replacement=replacements[methods[1] - 1], warning=warnings[methods[1] - 1],
-                                         value_range=value_ranges[methods[1] - 1])
+                                         warning=warnings[methods[1] - 1], value_range=value_ranges[methods[1] - 1])
 
         if methods[2] > 1:
-            replacements: List[Number] = [CROSSOVER_LINEAR, CROSSOVER_BLEND, CROSSOVER_SIMULATED_BINARY]
             warnings: List[str] = ["Linear", "Blend", "Simulated binary"]
-            methods_values[2] = self.get(self.methods_entries[2][methods[2] - 2], replacement=replacements[methods[2] - 2],
-                                         warning=f"{warnings[methods[2] - 2]} crossover coefficient should be a positive float")
+            methods_values[2] = self.get(self.methods_entries[2][methods[2] - 2],
+                                         warning=f"{warnings[methods[2] - 2]} crossover coefficient: positive float")
 
         if methods[3] > 1:
-            replacements: List[Number] = [PROBLEM_SIZE[0] * PROBLEM_SIZE[1], MUTATION_POLYNOMIAL]
             warnings: List[str] = ["Non-uniform", "Polynomial"]
-            methods_values[3] = self.get(self.methods_entries[3][methods[3] - 2], replacement=replacements[methods[3] - 2],
-                                         warning=f"{warnings[methods[3] - 2]} mutation coefficient should be a positive float")
+            methods_values[3] = self.get(self.methods_entries[3][methods[3] - 2],
+                                         warning=f"{warnings[methods[3] - 2]} mutation coefficient: positive float")
 
         if any([elem is None for elem in algorithm_parameters_lst + methods_values]):
             return None
@@ -569,11 +541,15 @@ class Application:
         solver = Solver(self.problem_size, problem_parameters, algorithm_parameters, self.progress_with_frame)
         best_solutions, best_feasible_solutions = solver.genetic_algorithm()
         start_solution: Solution = best_feasible_solutions[0]
-        best_solution: Solution = sorted([solution for solution in best_feasible_solutions if solution is not None], key=lambda sol: sol.fitness)[-1]
+        best_solution: Solution = sorted([solution for solution in best_feasible_solutions if solution is not None],
+                                         key=lambda sol: sol.fitness, reverse=True)[0]
         best_fitnesses: List[float] = [solution.fitness for solution in best_solutions]
-        best_feasible_fitnesses: List[float] = [solution.fitness if solution is not None else 0 for solution in best_feasible_solutions]
+        best_feasible_fitnesses_idx: List[int] = [i + 1 for i, solution in enumerate(best_feasible_solutions) if solution is not None]
+        best_feasible_fitnesses: List[float] = [solution.fitness for solution in best_feasible_solutions if solution is not None]
         penalties_equality: List[float] = [solution.penalty_equality for solution in best_solutions]
         penalties_inequality: List[float] = [solution.penalty_inequality for solution in best_solutions]
+
+        print(sorted(best_solutions, key=lambda sol: sol.fitness, reverse=True)[0].X.sum(axis=0))
 
         # Results
         for frame, fitness_frame, result in [(self.start_solution_frame, self.start_fitness_frame, start_solution),
@@ -611,29 +587,32 @@ class Application:
             widget.destroy()
 
         fig = plt.Figure(figsize=(10, 10), dpi=100)
-        ax1 = fig.add_subplot(2, 2, (1, 2))
-        ax2 = fig.add_subplot(2, 2, 3)
-        ax3 = fig.add_subplot(2, 2, 4)
+        ax1 = fig.add_subplot(2, 1, 1)
+        ax2 = fig.add_subplot(2, 1, 2)
         FigureCanvasTkAgg(fig, plot_tab).get_tk_widget().pack()
 
-        factor = 0.1 if len(np.unique(best_fitnesses)) + len(np.unique(best_feasible_fitnesses)) == 2 else 0
-        step = 100 if len(np.unique(best_fitnesses)) + len(np.unique(best_feasible_fitnesses)) == 2 and best_fitnesses[0] == 0 and best_feasible_fitnesses[0] == 0 else 0
+        factor = 0.1 if len(np.unique(best_fitnesses)) + len(np.unique(best_feasible_fitnesses)) <= 2 else 0
+        step = 100 if len(np.unique(best_fitnesses)) + len(np.unique(best_feasible_fitnesses)) <= 2 and best_fitnesses[0] == 0 and best_feasible_fitnesses[0] == 0 else 0
         ax1.plot([i for i in range(len(best_fitnesses) + 1)], [0.0] + best_fitnesses, label="All")
-        ax1.plot([i for i in range(len(best_feasible_fitnesses) + 1)], [0.0] + best_feasible_fitnesses, label="Feasible")
-        ax1.axis([1, len(best_fitnesses), (1 - factor) * min(min(best_fitnesses), min(best_feasible_fitnesses)) - step, (1 + factor) * max(max(best_fitnesses), max(best_feasible_fitnesses)) + step])
+        ax1.scatter(best_feasible_fitnesses_idx, best_feasible_fitnesses, label="Feasible", color="red")
+        ax1.axis([1, len(best_fitnesses), (1 - factor) * min(min(best_fitnesses), min(best_feasible_fitnesses)) - step,
+                  (1 + factor) * max(max(best_fitnesses), max(best_feasible_fitnesses)) + step])
         ax1.grid()
-        ax1.set_title("Best solutions' objective function and penalty plots")
-        ax1.set_xlabel("Number of generation"), ax1.set_ylabel("Objective function value")
         ax1.legend()
 
-        for ax, values, text in zip((ax2, ax3), (penalties_equality, penalties_inequality), ("Equality", "Inequality")):
-            factor = 0.1 if len(np.unique(values)) == 1 else 0
-            step = 100 if len(np.unique(values)) == 1 and values[0] == 0 else 0
-            ax.plot([i for i in range(len(values) + 1)], [0.0] + values)
-            ax.axis([1, len(values), (1 - factor) * min(values) - step, (1 + factor) * max(values) + step])
-            ax.grid()
-            ax.set_xlabel("Number of generation"), ax.set_ylabel(f"{text} penalty value")
+        factor = 0.1 if len(np.unique(penalties_equality)) + len(np.unique(penalties_inequality)) <= 2 else 0
+        step = 100 if len(np.unique(penalties_equality)) + len(np.unique(penalties_inequality)) <= 2 and penalties_equality[0] == 0 and penalties_inequality[0] == 0 else 0
+        ax2.plot([i for i in range(len(penalties_equality) + 1)], [0.0] + penalties_equality, label="Equality constraint")
+        ax2.plot([i for i in range(len(penalties_inequality) + 1)], [0.0] + penalties_inequality, label="Inequality constraint")
+        ax2.axis([1, len(penalties_equality), (1 - factor) * min(min(penalties_equality), min(penalties_inequality)) - step,
+                  (1 + factor) * max(max(penalties_equality), max(penalties_inequality)) + step])
+        ax2.grid()
+        ax2.legend()
 
+        ax1.set_title("Best solutions' objective function and penalty plots")
+        ax1.set_ylabel("Objective function value")
+        ax2.set_xlabel("Number of generation")
+        ax2.set_ylabel("Penalty value")
         plt.show()
 
         # Show connections

@@ -53,29 +53,11 @@ class Solver:
         self.progress["value"] = 0
 
         # Number of parent in the sorting grouping strategy
-        self.n_parent = 0
+        self.n_parent: int = 0
 
         # First generation
-        self.population = []
-
-        # Random
-        if algorithm_parameters.methods[0] == 0:
-            self.population = [Solution(problem_size, problem_parameters, algorithm_parameters)
-                               for _ in range(self.population_size)]
-            # self.population = [Solution(problem_size, problem_parameters, algorithm_parameters)
-            #                    for _ in range(self.population_size // 2)]
-            # self.population += [Solution(problem_size, problem_parameters, algorithm_parameters, feas=False)
-            #                    for _ in range(self.population_size - self.population_size // 2)]
-
-        # Best or worst
-        else:
-            idx = -1 if algorithm_parameters.methods[0] == 1 else 0
-
-            for _ in range(self.population_size):
-                solutions = [Solution(problem_size, problem_parameters, algorithm_parameters)
-                             for _ in range(algorithm_parameters.methods_values[0])]
-                self.population.append(sorted(solutions, key=lambda sol: sol.fitness)[idx])
-
+        self.population = [Solution(problem_size, problem_parameters, algorithm_parameters)
+                           for _ in range(self.population_size)]
         self.sorted_population = self.population
 
     def spin(self) -> Tuple[Solution, Solution]:
@@ -226,9 +208,22 @@ class Solver:
 
         # Simulated binary
         else:
-            n = self.crossover_method_value
+            eta = self.crossover_method_value
+
+            # for i in range(self.problem_size.M):
+            #     for j in range(self.problem_size.N):
+            #         gamma = 1 + 2 * min(parent1[i, j], 1 - parent2[i, j]) / (parent1[i, j] - parent2[i, j])
+            #         alpha = 2 - gamma**(-eta - 1)
+            #         u = np.random.uniform()
+            #
+            #         if u <= 1 / alpha:
+            #             beta = (u * alpha)**(1 / (eta + 1))
+            #
+            #         else:
+            #             beta = 1 / (2 - u * alpha)**(1 / (eta + 1))
+
             u = np.random.uniform()
-            beta = (2 * u)**(1 / (1 + n)) if u <= 0.5 else (1 / (2 - 2 * u))**(1 / (1 + n))
+            beta = (2 * u)**(1 / (1 + eta)) if u <= 0.5 else (1 / (2 - 2 * u))**(1 / (1 + eta))
             offspring1 = (parent1.mul(1 + beta) + parent2.mul(1 - beta)).mul(0.5)
             offspring2 = (parent1.mul(1 - beta) + parent2.mul(1 + beta)).mul(0.5)
 

@@ -19,7 +19,7 @@ class Solution:
     """
 
     def __init__(self, problem_size: ProblemSize, problem_parameters: ProblemParameters,
-                 algorithm_parameters: AlgorithmParameters, mat: Optional[np.ndarray] = None, feas=True) -> None:
+                 algorithm_parameters: AlgorithmParameters, mat: Optional[np.ndarray] = None) -> None:
         """
         Constructor
         :param problem_size: Problem size
@@ -47,6 +47,9 @@ class Solution:
         self.n_generations = algorithm_parameters.n_generations
         self.equality_penalty_coefficient = algorithm_parameters.equality_penalty_coefficient
         self.inequality_penalty_coefficient = algorithm_parameters.inequality_penalty_coefficient
+
+        start_method = algorithm_parameters.methods[0]
+        start_method_value = algorithm_parameters.methods_values[0]
         self.mutation_method = algorithm_parameters.methods[3]
         self.mutation_method_value = algorithm_parameters.methods_values[3]
 
@@ -55,37 +58,42 @@ class Solution:
 
         # Decision variables matrix
         if mat is None:
-            while True:
-                if feas:
-                    self.X = np.random.uniform(size=(self.M, self.N))
+            if start_method == 0:
+                while True:
+                    if np.random.uniform() < 0.5 and start_method_value == 1:
+                        self.X = np.random.uniform(low=0, high=2 / self.N, size=(self.M, self.N))
 
-                    for j in range(self.N):
-                        col_sum = self.X[:, j].sum()
-                        self.X[:, j] /= col_sum
+                    else:
+                        self.X = np.random.uniform(size=(self.M, self.N))
 
-                else:
-                    self.X = np.random.uniform(low=0, high=2 / self.N, size=(self.M, self.N))
+                        for j in range(self.N):
+                            col_sum = self.X[:, j].sum()
+                            self.X[:, j] /= col_sum
 
-                if (self.X @ self.d.T <= self.c).all():
-                    break
+                    if (self.X @ self.d.T <= self.c).all():
+                        break
 
-            # if feas:
-            #     while True:
-            #         self.X = np.zeros((self.M, self.N))
-            #
-            #         for j in range(self.N):
-            #             idx_to_omit = np.random.randint(self.M)
-            #             indexes: List[int] = [i for i in range(self.M) if i != idx_to_omit]
-            #             shuffle(indexes)
-            #
-            #             while indexes:
-            #                 i = indexes.pop()
-            #                 self.X[i, j] = np.random.uniform(low=0, high=1 - self.X[:, j].sum())
-            #
-            #             self.X[idx_to_omit, j] = 1 - self.X[:, j].sum()
-            #
-            #         if (self.X @ self.d.T <= self.c).all():
-            #             break
+            else:
+                while True:
+                    if np.random.uniform() < 0.5 and start_method_value == 1:
+                        self.X = np.random.uniform(low=0, high=2 / self.N, size=(self.M, self.N))
+
+                    else:
+                        self.X = np.zeros((self.M, self.N))
+
+                        for j in range(self.N):
+                            idx_to_omit = np.random.randint(self.M)
+                            indexes: List[int] = [i for i in range(self.M) if i != idx_to_omit]
+                            shuffle(indexes)
+
+                            while indexes:
+                                i = indexes.pop()
+                                self.X[i, j] = np.random.uniform(low=0, high=1 - self.X[:, j].sum())
+
+                            self.X[idx_to_omit, j] = 1 - self.X[:, j].sum()
+
+                    if (self.X @ self.d.T <= self.c).all():
+                        break
 
         else:
             self.X = mat
@@ -170,10 +178,14 @@ class Solution:
         income = ((self.V * self.X) @ self.d.T).sum()
         are_located = (self.X.sum(axis=1) > 0).astype(int)
         cost = (are_located * (self.b + self.f + (np.ceil(self.X) * self.S).sum(axis=1).reshape(self.M, 1))).sum()
-        equality_constraint_diff = np.abs(self.X.sum(axis=0) - 1)
-        inequality_constraint_diff = np.maximum(np.zeros((self.M, 1)), self.X @ self.d.T - self.c)
-        self.penalty_equality = self.equality_penalty_coefficient * equality_constraint_diff.sum()**2
-        self.penalty_inequality = self.inequality_penalty_coefficient * inequality_constraint_diff.sum()**2
+        # equality_constraint_diff = np.abs(self.X.sum(axis=0) - 1)
+        # inequality_constraint_diff = np.maximum(np.zeros((self.M, 1)), self.X @ self.d.T - self.c)
+        # self.penalty_equality = self.equality_penalty_coefficient * equality_constraint_diff.sum()**2
+        # self.penalty_inequality = self.inequality_penalty_coefficient * inequality_constraint_diff.sum()**2
+        equality_constraint_diff = np.power(self.X.sum(axis=0) - 1, 2)
+        inequality_constraint_diff = np.power(np.maximum(np.zeros((self.M, 1)), self.X @ self.d.T - self.c), 2)
+        self.penalty_equality = self.equality_penalty_coefficient * equality_constraint_diff.sum()
+        self.penalty_inequality = self.inequality_penalty_coefficient * inequality_constraint_diff.sum()
         self.fitness = income - cost - self.penalty_equality - self.penalty_inequality
 
     def is_correct(self) -> bool:
@@ -231,6 +243,7 @@ class Solution:
         # # Non-uniform
         elif self.mutation_method == 2:
             b = self.mutation_method_value
+            T = self.n_generations
             mat = deepcopy(self.X)
 
             for i in range(self.M):
@@ -242,9 +255,8 @@ class Solution:
                         else:
                             alpha = -mat[i, j]
 
-                        beta = np.random.uniform()
-
-                        mat[i, j] = mat[i, j] + alpha * (1 - beta**(1 - n_generation / self.n_generations)**b)
+                        r = np.random.uniform()
+                        mat[i, j] = mat[i, j] + alpha * (1 - r**((1 - n_generation / T)**b))
 
             return Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=mat)
 
