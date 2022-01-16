@@ -62,7 +62,7 @@ class Solution:
             if start_method == 0:
                 while True:
                     if np.random.uniform() < start_method_value:
-                        self.X = np.random.uniform(low=0, high=2 / self.N, size=(self.M, self.N))
+                        self.X = np.random.uniform(low=0, high=2 / self.M, size=(self.M, self.N))
 
                     else:
                         self.X = np.random.uniform(size=(self.M, self.N))
@@ -77,7 +77,7 @@ class Solution:
             else:
                 while True:
                     if np.random.uniform() < start_method_value:
-                        self.X = np.random.uniform(low=0, high=2 / self.N, size=(self.M, self.N))
+                        self.X = np.random.uniform(low=0, high=2 / self.M, size=(self.M, self.N))
 
                     else:
                         self.X = np.zeros((self.M, self.N))

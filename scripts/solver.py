@@ -266,10 +266,10 @@ class Solver:
             else:
                 self.population = sorted(self.population + new_generation, key=lambda sol: sol.fitness, reverse=True)[:self.population_size]
 
-            print(sum([(np.abs(solution.X.sum(axis=0) - 1) < CONSTRAINT_ACCURACY * np.ones((1, self.problem_size.N))).all()
-                       for solution in self.population]), end="\t")
+            #print(sum([(np.abs(solution.X.sum(axis=0) - 1) < CONSTRAINT_ACCURACY * np.ones((1, self.problem_size.N))).all()
+             #          for solution in self.population]), end="\t")
 
-        print()
+        #print()
 
         self.progress["value"] = 100
 

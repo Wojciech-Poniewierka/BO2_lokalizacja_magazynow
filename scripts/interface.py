@@ -555,14 +555,14 @@ class Application:
 
         # Solver
         self.solver = Solver(self.problem_size, problem_parameters, algorithm_parameters, self.progress_with_frame)
-        best_fitness: float = float("-inf")
+        best_fitness_diff: float = -1 * float('inf')
         best_solutions: Optional[List[Solution]] = None
 
         for _ in range(n_runs):
-            best_solutions_run, best_fitness_run = self.run()
+            best_solutions_run, fitness_diff = self.run()
 
-            if best_fitness_run > best_fitness:
-                best_fitness = best_fitness_run
+            if fitness_diff > best_fitness_diff:
+                best_fitness_diff = fitness_diff
                 best_solutions = best_solutions_run
 
         best_feasible_solutions: List[Solution] = [solution.scale() for solution in best_solutions]
@@ -594,6 +594,9 @@ class Application:
         # Results
         for frame, fitness_frame, result in [(self.start_solution_frame, self.start_fitness_frame, start_solution),
                                              (self.best_solution_frame, self.best_fitness_frame, best_solution)]:
+            for widget in frame.winfo_children():
+                widget.destroy()
+
             tk.Label(frame, text="Shops", font=("Garamond", 12, "bold")).grid(row=0, column=1, columnspan=self.problem_size.N)
             tk.Label(frame, text="Warehouses", font=("Garamond", 12, "bold")).grid(row=1, column=0, rowspan=self.problem_size.M)
 
@@ -669,7 +672,7 @@ class Application:
         best_feasible_solutions: List[Solution] = [solution.scale() for solution in best_solutions]
         best_solution: Solution = sorted(best_feasible_solutions, key=lambda sol: sol.fitness, reverse=True)[0]
 
-        return best_solutions, best_solution.fitness
+        return best_solutions, abs(best_solution.fitness - best_feasible_solutions[0].fitness)
 
 
 # MAIN
