@@ -65,27 +65,31 @@ class Application:
         self.notebook.add(generator_tab, text="Generator")
         self.tabs = [main_tab, plot_tab, generator_tab]
         #--------------------------------------------------------------------------------------------------------------#
-        # Buttons
-        self.dim_button = tk.Button(frames[0], text="Set size", command=self.determine_size)
-        self.dim_button.grid(row=0, column=0, ipadx=10, ipady=10)
-
-        self.run_button = tk.Button(frames[0], text="Run", command=self.run, state="disabled")
-        self.run_button.grid(row=0, column=1, ipadx=10, ipady=10)
-
-        progress = ttk.Progressbar(frames[0], orient=tk.HORIZONTAL, mode="determinate")
-        progress.grid(row=0, column=2)
-        self.progress_with_frame: Tuple[ttk.Progressbar, tk.Frame] = (progress, frames[0])
-
         # Problem size
-        tk.Label(frames[0], text="Size", font=BOLD_FONT).grid(row=1, column=0, columnspan=2)
-        self.size_entries: List[tk.Entry] = [tk.Entry(frames[0]), tk.Entry(frames[0])]
+        self.dim_button = tk.Button(frames[0], text="Set size", command=self.determine_size)
+        self.dim_button.grid(row=0, column=0, columnspan=2, ipadx=10, ipady=10)
+        self.size_entries: List[tk.Entry] = [tk.Entry(frames[0], width=8), tk.Entry(frames[0], width=8)]
 
         for i, dimension in enumerate(PROBLEM_SIZE):
-            self.size_entries[i].grid(row=2, column=i)
+            self.size_entries[i].grid(row=1, column=i, ipadx=5, ipady=5)
             self.size_entries[i].insert(0, dimension)
 
+        # Run algorithm
+        self.solver = None
+
+        self.run_button = tk.Button(frames[0], text="Run", command=self.solve, state="disabled")
+        self.run_button.grid(row=0, column=2, ipadx=10, ipady=10)
+
+        self.run_entry = tk.Entry(frames[0], width=3)
+        self.run_entry.grid(row=0, column=4)
+        self.run_entry.insert(0, 1)
+
+        progress = ttk.Progressbar(frames[0], orient=tk.HORIZONTAL, mode="determinate")
+        progress.grid(row=1, column=3, columnspan=2)
+        self.progress_with_frame: Tuple[ttk.Progressbar, tk.Frame] = (progress, frames[0])
+
         # Algorithm parameters
-        tk.Label(frames[0], text="Parameters", font=BOLD_FONT).grid(row=3, column=0, columnspan=2)
+        tk.Label(frames[0], text="Parameters", font=BOLD_FONT).grid(row=2, column=0, columnspan=2)
         self.algorithm_parameters_entries: List[tk.Entry] = []
         algorithm_parameters_texts: List[str] = ["Population size", "Number of generations", "Crossover ratio",
                                                  "Mutation ratio", "Equality constraint penalty coefficient",
@@ -94,26 +98,26 @@ class Application:
                                                              MUTATION_RATIO, EQUALITY_PENALTY, INEQUALITY_PENALTY]
 
         for i, (text, default_value) in enumerate(zip(algorithm_parameters_texts, algorithm_parameters_default_values)):
-            tk.Label(frames[0], text=text).grid(row=i + 4, column=0)
+            tk.Label(frames[0], text=text).grid(row=i + 3, column=0, columnspan=2)
             algorithm_parameters_entry = tk.Entry(frames[0])
-            algorithm_parameters_entry.grid(row=i + 4, column=1)
+            algorithm_parameters_entry.grid(row=i + 3, column=2, columnspan=2)
             algorithm_parameters_entry.insert(0, default_value)
             self.algorithm_parameters_entries.append(algorithm_parameters_entry)
 
         # Warning labels
-        tk.Label(frames[0], text="Warnings", font=BOLD_FONT).grid(row=10, column=0, columnspan=2)
+        tk.Label(frames[0], text="Warnings", font=BOLD_FONT).grid(row=9, column=0, columnspan=4)
         self.size_warning_label_text = tk.StringVar(value="")
         tk.Label(frames[0], textvariable=self.size_warning_label_text,
-                 justify=tk.LEFT).grid(row=11, column=0, columnspan=2)
+                 justify=tk.LEFT).grid(row=10, column=0, columnspan=4)
         self.main_warning_label_text = tk.StringVar(value="")
         tk.Label(frames[0], textvariable=self.main_warning_label_text,
-                 justify=tk.LEFT).grid(row=12, column=0, columnspan=2)
+                 justify=tk.LEFT).grid(row=11, column=0, columnspan=4)
         #--------------------------------------------------------------------------------------------------------------#
         # Radio buttons
-        self.methods: List[tk.IntVar] = [tk.IntVar() for _ in range(4)]
-        methods_frames: List[tk.Frame] = [tk.Frame(frames[1]) for _ in range(4)]
+        self.methods: List[tk.IntVar] = [tk.IntVar() for _ in range(5)]
+        methods_frames: List[tk.Frame] = [tk.Frame(frames[1]) for _ in range(5)]
 
-        for i, text in enumerate(["Start solution", "Selection", "Crossover", "Mutation"]):
+        for i, text in enumerate(["Start solution", "Selection", "Crossover", "Mutation", "Inheritance"]):
             methods_frames[i].grid(row=i // 2, column=i % 2, sticky="NW", pady=(0, 10))
             tk.Label(methods_frames[i], text=text, font=BOLD_FONT).grid(row=0, column=0, columnspan=2)
 
@@ -138,11 +142,14 @@ class Application:
                     self.methods_entries[i][-1].insert(0, value)
                     self.methods_entries[i][-1]["state"] = "disabled"
 
-        # Checkbox
+        # Entry
         self.start_entry = tk.Entry(methods_frames[0])
         self.start_entry.grid(row=3, column=0, sticky=tk.W)
         self.start_entry.insert(0, S_PROBABILITY)
         tk.Label(methods_frames[0], text="Infeasible solution probability").grid(row=3, column=1, sticky=tk.W)
+
+        # Checkbox
+        tk.Checkbutton(methods_frames[4], text="Kill parents", variable=self.methods[4]).grid(row=1, column=0, sticky=tk.W)
         #--------------------------------------------------------------------------------------------------------------#
         # Result label
         tk.Label(frames[2], text="Start solution", font=BOLD_FONT).grid(row=0, column=0)
@@ -486,13 +493,19 @@ class Application:
                 array = pd.read_csv(f"instances/{symbol}_{n_instance}.csv").to_numpy()
                 self.mats[-1].set_array(array)
 
-    def run(self) -> None:
+    def solve(self) -> None:
         """
-        Method to run the algorithm and display the results
+        Method to solve the problem and display the results
         """
 
         # Clear the labels
         self.main_warning_label_text.set("")
+
+        # Number of runs
+        n_runs = self.get(self.run_entry, is_int=True, warning="Number of runs: positive integer")
+
+        if n_runs is None:
+            return None
 
         # Problem parameters
         f, S, c = self.mats[0].array, self.mats[1].array, self.mats[2].array
@@ -508,7 +521,7 @@ class Application:
                                                           warning=warning, value_range=(0, 1) if i in (2, 3) else None)
                                                  for i, warning in enumerate(warnings)]
 
-        methods: List[int] = [int(self.methods[i].get()) for i in range(4)]
+        methods: List[int] = [int(self.methods[i].get()) for i in range(5)]
         methods_values: List[Optional[Number]] = [-1 for _ in range(4)]
 
         start_method_value = self.get(self.start_entry, value_range=(0, 1),
@@ -541,18 +554,42 @@ class Application:
         algorithm_parameters = AlgorithmParameters(methods, methods_values, *algorithm_parameters_lst)
 
         # Solver
-        solver = Solver(self.problem_size, problem_parameters, algorithm_parameters, self.progress_with_frame)
-        best_solutions, best_feasible_solutions = solver.genetic_algorithm()
-        start_solution: Solution = best_feasible_solutions[0]
-        best_solution: Solution = sorted([solution for solution in best_feasible_solutions if solution is not None],
-                                         key=lambda sol: sol.fitness, reverse=True)[0]
+        self.solver = Solver(self.problem_size, problem_parameters, algorithm_parameters, self.progress_with_frame)
+        best_fitness: float = float("-inf")
+        best_solutions: Optional[List[Solution]] = None
+
+        for _ in range(n_runs):
+            best_solutions_run, best_fitness_run = self.run()
+
+            if best_fitness_run > best_fitness:
+                best_fitness = best_fitness_run
+                best_solutions = best_solutions_run
+
+        best_feasible_solutions: List[Solution] = [solution.scale() for solution in best_solutions]
         best_fitnesses: List[float] = [solution.fitness for solution in best_solutions]
-        best_feasible_fitnesses_idx: List[int] = [i + 1 for i, solution in enumerate(best_feasible_solutions) if solution is not None]
-        best_feasible_fitnesses: List[float] = [solution.fitness for solution in best_feasible_solutions if solution is not None]
+        # best_feasible_fitnesses_idx: List[int] = [i + 1 for i, solution in enumerate(best_feasible_solutions) if solution is not None]
+        # best_feasible_fitnesses: List[float] = [solution.fitness for solution in best_feasible_solutions if solution is not None]
+        best_feasible_fitnesses: List[float] = [solution.fitness for solution in best_feasible_solutions]
         penalties_equality: List[float] = [solution.penalty_equality for solution in best_solutions]
         penalties_inequality: List[float] = [solution.penalty_inequality for solution in best_solutions]
 
-        print(sorted(best_solutions, key=lambda sol: sol.fitness, reverse=True)[0].X.sum(axis=0))
+        start_solution: Solution = best_feasible_solutions[0]
+        best_solution: Solution = sorted(best_feasible_solutions, key=lambda sol: sol.fitness, reverse=True)[0]
+
+        # start_solution: Solution = best_feasible_solutions[0]
+        # best_solution: Solution = sorted([solution for solution in best_feasible_solutions if solution is not None],
+        #                                  key=lambda sol: sol.fitness, reverse=True)[0]
+
+        # H = sorted(best_solutions, key=lambda sol: sol.fitness, reverse=True)[0]
+        # print(H.X.sum(axis=0))
+        #
+        # for j in range(self.problem_size.N):
+        #     col_sum = H.X[:, j].sum()
+        #     H.X[:, j] /= col_sum
+        #
+        # print(H)
+        # H.calculate()
+        # print(H.fitness)
 
         # Results
         for frame, fitness_frame, result in [(self.start_solution_frame, self.start_fitness_frame, start_solution),
@@ -578,7 +615,7 @@ class Application:
             for j in range(3):
                 font = ("Garamond", 10, "bold") if j == 1 else ("Garamond", 10, "normal")
                 cell = tk.Entry(self.constraint_frame, fg=TEXT_COLOR, bg="white", width=15, justify=tk.CENTER, font=font)
-                value = round(capacity_constraint[i, 0], 2)\
+                value = round(capacity_constraint[i, 0], 2) \
                     if j == 0 else ("<=" if j == 1 else round(capacity_constraint[i, 1], 2))
                 cell.grid(row=i, column=j), cell.insert(0, value)
                 cell["state"] = "disabled"
@@ -597,7 +634,8 @@ class Application:
         factor = 0.1 if len(np.unique(best_fitnesses)) + len(np.unique(best_feasible_fitnesses)) <= 2 else 0
         step = 100 if len(np.unique(best_fitnesses)) + len(np.unique(best_feasible_fitnesses)) <= 2 and best_fitnesses[0] == 0 and best_feasible_fitnesses[0] == 0 else 0
         ax1.plot([i for i in range(len(best_fitnesses) + 1)], [0.0] + best_fitnesses, label="All")
-        ax1.scatter(best_feasible_fitnesses_idx, best_feasible_fitnesses, label="Feasible", color="red")
+        ax1.plot([i for i in range(len(best_fitnesses) + 1)], [0.0] + best_feasible_fitnesses, label="Feasible", color="red", ls="--")
+        # ax1.scatter(best_feasible_fitnesses_idx, best_feasible_fitnesses, label="Feasible", color="red")
         ax1.axis([1, len(best_fitnesses), (1 - factor) * min(min(best_fitnesses), min(best_feasible_fitnesses)) - step,
                   (1 + factor) * max(max(best_fitnesses), max(best_feasible_fitnesses)) + step])
         ax1.grid()
@@ -620,6 +658,18 @@ class Application:
 
         # Show connections
         self.area.draw(warehouses=np.array([best_solution.X[i, :].sum() > 0 for i in range(self.problem_size.M)]))
+
+    def run(self) -> Tuple[List[Solution], float]:
+        """
+        Method to run the algorithm
+        :return: Best solutions, best solution's fitness
+        """
+
+        best_solutions = self.solver.genetic_algorithm()
+        best_feasible_solutions: List[Solution] = [solution.scale() for solution in best_solutions]
+        best_solution: Solution = sorted(best_feasible_solutions, key=lambda sol: sol.fitness, reverse=True)[0]
+
+        return best_solutions, best_solution.fitness
 
 
 # MAIN

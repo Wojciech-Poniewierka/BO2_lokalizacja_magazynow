@@ -28,11 +28,13 @@ COST_MIN = 10                               # Minimal cost
 COST_MAX = 20                               # Maximal cost
 
 POPULATION_SIZE = 50                        # Population size
-N_GENERATIONS = 200                         # Number of generations
+N_GENERATIONS = 500                         # Number of generations
 CROSSOVER_RATIO = 0.9                       # Crossover ratio
 MUTATION_RATIO = 0.1                        # Mutation ratio
-EQUALITY_PENALTY = 1000                     # Equality constraint penalty coefficient
+EQUALITY_PENALTY = 50000                    # Equality constraint penalty coefficient
 INEQUALITY_PENALTY = 0                      # Inequality constraint penalty coefficient
+
+CONSTRAINT_ACCURACY = 0.01                  # Equality constraint accuracy
 
 S_PROBABILITY = 0.25                        # Infeasible start solution occurrence probability
 
@@ -45,5 +47,5 @@ C_LINEAR = 0.5                              # Linear crossover coefficient
 C_BLEND = 0.5                               # Blend crossover coefficient
 C_SIMULATED_BINARY = 7                      # Simulated binary crossover coefficient
 
-M_NON_UNIFORM = 30                          # Non-uniform mutation coefficient
+M_NON_UNIFORM = 5                           # Non-uniform mutation coefficient
 M_POLYNOMIAL = 60                           # Polynomial mutation coefficient

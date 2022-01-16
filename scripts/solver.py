@@ -10,6 +10,7 @@ import tkinter.ttk as ttk
 from typing import Tuple, List, Optional
 
 # PROJECT MODULES
+from config import CONSTRAINT_ACCURACY
 from data import ProblemSize, ProblemParameters, AlgorithmParameters
 from solution import Solution
 
@@ -47,6 +48,7 @@ class Solver:
         self.selection_method_value = algorithm_parameters.methods_values[1]
         self.crossover_method = algorithm_parameters.methods[2]
         self.crossover_method_value = algorithm_parameters.methods_values[2]
+        self.inheritance = algorithm_parameters.methods[4]
 
         # Progress bar
         self.progress, self.progress_frame = progress_with_frame
@@ -209,19 +211,6 @@ class Solver:
         # Simulated binary
         else:
             eta = self.crossover_method_value
-
-            # for i in range(self.problem_size.M):
-            #     for j in range(self.problem_size.N):
-            #         gamma = 1 + 2 * min(parent1[i, j], 1 - parent2[i, j]) / (parent1[i, j] - parent2[i, j])
-            #         alpha = 2 - gamma**(-eta - 1)
-            #         u = np.random.uniform()
-            #
-            #         if u <= 1 / alpha:
-            #             beta = (u * alpha)**(1 / (eta + 1))
-            #
-            #         else:
-            #             beta = 1 / (2 - u * alpha)**(1 / (eta + 1))
-
             u = np.random.uniform()
             beta = (2 * u)**(1 / (1 + eta)) if u <= 0.5 else (1 / (2 - 2 * u))**(1 / (1 + eta))
             offspring1 = (parent1.mul(1 + beta) + parent2.mul(1 - beta)).mul(0.5)
@@ -234,14 +223,14 @@ class Solver:
         else:
             return parent1, parent2
 
-    def genetic_algorithm(self) -> Tuple[List[Solution], List[Optional[Solution]]]:
+    def genetic_algorithm(self) -> List[Solution]:
         """
         Method to perform the genetic algorithm
         :return: Best solutions and best feasible solutions throughout the history
         """
 
         best_solutions: List[Solution] = []
-        best_feasible_solutions: List[Optional[Solution]] = []
+        # best_feasible_solutions: List[Optional[Solution]] = []
         progress_ticks: int = 0
 
         for n_generation in range(self.n_generations):
@@ -254,13 +243,13 @@ class Solver:
             self.sorted_population = sorted(self.population, key=lambda sol: sol.fitness, reverse=True)
             best_solutions.append(self.sorted_population[0])
 
-            for solution in self.sorted_population:
-                if solution.is_feasible():
-                    best_feasible_solutions.append(solution)
-                    break
-
-            else:
-                best_feasible_solutions.append(None)
+            # for solution in self.sorted_population:
+            #     if solution.is_feasible():
+            #         best_feasible_solutions.append(solution)
+            #         break
+            #
+            # else:
+            #     best_feasible_solutions.append(None)
 
             for _ in range(0, self.population_size, 2):
 
@@ -271,17 +260,20 @@ class Solver:
                 new_generation.append(offspring1.mutate(n_generation))
                 new_generation.append(offspring2.mutate(n_generation))
 
-            self.population = new_generation
-            print(sum([(np.abs(solution.X.sum(axis=0) - 1) < 0.01 * np.ones((1, self.problem_size.N))).all()
-                       for solution in self.population]), end="\t")
+            if self.inheritance == 1:
+                self.population = new_generation
 
-            # self.population = sorted(self.population + new_generation, key=lambda sol: sol.fitness, reverse=True)[:self.population_size]
+            else:
+                self.population = sorted(self.population + new_generation, key=lambda sol: sol.fitness, reverse=True)[:self.population_size]
+
+            print(sum([(np.abs(solution.X.sum(axis=0) - 1) < CONSTRAINT_ACCURACY * np.ones((1, self.problem_size.N))).all()
+                       for solution in self.population]), end="\t")
 
         print()
 
         self.progress["value"] = 100
 
-        return best_solutions, best_feasible_solutions
+        return best_solutions
 
     def save_problem_parameters(self) -> None:
         """

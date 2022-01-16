@@ -9,6 +9,7 @@ from copy import deepcopy
 from random import shuffle
 
 # PROJECT MODULES
+from config import CONSTRAINT_ACCURACY
 from data import ProblemSize, ProblemParameters, AlgorithmParameters
 
 
@@ -170,6 +171,20 @@ class Solution:
 
         return Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=self.X * factor)
 
+    def scale(self) -> "Solution":
+        """
+        Method to scale the Solution matrix
+        :return: Scaled solution
+        """
+
+        mat = deepcopy(self.X)
+
+        for j in range(self.N):
+            col_sum = mat[:, j].sum()
+            mat[:, j] /= col_sum
+
+        return Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=mat)
+
     def calculate(self) -> None:
         """
         Method to calculate the objective function and the penalty values
@@ -202,7 +217,7 @@ class Solution:
         :return: Flag informing if the solution is feasible
         """
 
-        return self.is_correct() and (self.X @ self.d.T <= self.c).all() and (np.abs(self.X.sum(axis=0) - 1) < 0.01 * np.ones((1, self.problem_size.N))).all()
+        return self.is_correct() and (self.X @ self.d.T <= self.c).all() and (np.abs(self.X.sum(axis=0) - 1) < CONSTRAINT_ACCURACY * np.ones((1, self.problem_size.N))).all()
 
     def mutate(self, n_generation: int) -> "Solution":
         """
@@ -271,9 +286,9 @@ class Solution:
                         u = np.random.uniform()
 
                         if u <= 0.5:
-                            mat[i, j] = mat[i, j] + (2 * u)**(1 / (1 + eta)) - 1
+                            mat[i, j] = mat[i, j] + mat[i, j] * ((2 * u)**(1 / (1 + eta)) - 1)
 
                         else:
-                            mat[i, j] = mat[i, j] + (1 - (2 - 2 * u)**(1 / (1 + eta))) * (1 - mat[i, j])
+                            mat[i, j] = mat[i, j] + (1 - mat[i, j]) * (1 - (2 - 2 * u)**(1 / (1 + eta)))
 
             return Solution(self.problem_size, self.problem_parameters, self.algorithm_parameters, mat=mat)
