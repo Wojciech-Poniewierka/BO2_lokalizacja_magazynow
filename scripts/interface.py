@@ -139,9 +139,10 @@ class Application:
                     self.methods_entries[i][-1]["state"] = "disabled"
 
         # Checkbox
-        self.start_checkbox_value = tk.IntVar()
-        tk.Checkbutton(methods_frames[0], text="Allow infeasible solutions",
-                       variable=self.start_checkbox_value).grid(row=3, column=0, sticky=tk.W)
+        self.start_entry = tk.Entry(methods_frames[0])
+        self.start_entry.grid(row=3, column=0, sticky=tk.W)
+        self.start_entry.insert(0, S_PROBABILITY)
+        tk.Label(methods_frames[0], text="Infeasible solution probability").grid(row=3, column=1, sticky=tk.W)
         #--------------------------------------------------------------------------------------------------------------#
         # Result label
         tk.Label(frames[2], text="Start solution", font=BOLD_FONT).grid(row=0, column=0)
@@ -510,7 +511,8 @@ class Application:
         methods: List[int] = [int(self.methods[i].get()) for i in range(4)]
         methods_values: List[Optional[Number]] = [-1 for _ in range(4)]
 
-        methods_values[0] = self.start_checkbox_value.get()
+        start_method_value = self.get(self.start_entry, value_range=(0, 1),
+                                      warning="Infeasible solution probability: float from interval [0, 1]")
 
         if methods[1] > 0:
             warnings: List[str] = ["Sorting grouping strategy selection offset: non-negative integer",
@@ -531,9 +533,10 @@ class Application:
             methods_values[3] = self.get(self.methods_entries[3][methods[3] - 2],
                                          warning=f"{warnings[methods[3] - 2]} mutation coefficient: positive float")
 
-        if any([elem is None for elem in algorithm_parameters_lst + methods_values]):
+        if any([elem is None for elem in algorithm_parameters_lst + methods_values]) or start_method_value is None:
             return None
 
+        methods_values[0] = start_method_value
         problem_parameters = ProblemParameters(f, S, c, b, d, V)
         algorithm_parameters = AlgorithmParameters(methods, methods_values, *algorithm_parameters_lst)
 

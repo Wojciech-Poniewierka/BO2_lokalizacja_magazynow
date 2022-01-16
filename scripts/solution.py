@@ -60,7 +60,7 @@ class Solution:
         if mat is None:
             if start_method == 0:
                 while True:
-                    if np.random.uniform() < 0.5 and start_method_value == 1:
+                    if np.random.uniform() < start_method_value:
                         self.X = np.random.uniform(low=0, high=2 / self.N, size=(self.M, self.N))
 
                     else:
@@ -75,7 +75,7 @@ class Solution:
 
             else:
                 while True:
-                    if np.random.uniform() < 0.5 and start_method_value == 1:
+                    if np.random.uniform() < start_method_value:
                         self.X = np.random.uniform(low=0, high=2 / self.N, size=(self.M, self.N))
 
                     else:

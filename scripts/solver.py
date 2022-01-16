@@ -242,7 +242,7 @@ class Solver:
 
         best_solutions: List[Solution] = []
         best_feasible_solutions: List[Optional[Solution]] = []
-        progress_ticks: int = 10
+        progress_ticks: int = 0
 
         for n_generation in range(self.n_generations):
             if n_generation > self.n_generations / 100 * progress_ticks - 1:
@@ -278,6 +278,8 @@ class Solver:
             # self.population = sorted(self.population + new_generation, key=lambda sol: sol.fitness, reverse=True)[:self.population_size]
 
         print()
+
+        self.progress["value"] = 100
 
         return best_solutions, best_feasible_solutions
 
